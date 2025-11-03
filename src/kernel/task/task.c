@@ -1,4 +1,5 @@
 #include <xjos/task.h>
+#include <xjos/sched.h>
 #include <xjos/printk.h>
 #include <xjos/debug.h>
 #include <xjos/memory.h>
@@ -10,168 +11,25 @@
 #include <xjos/list.h>
 #include <xjos/global.h>
 #include <xjos/arena.h>
-#include <xjos/rbtree.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
 #define NR_TASKS (64)
 
-// === CFS Scheduler Constants ===
-// Sched period: assume jiffy = 10ms, 10 * 10ms = 100ms
-#define SCHED_LATENCY_MS (10 * jiffy) 
-// Min timeslice: 10ms
-#define MIN_TIMESLICE_MS (1 * jiffy) 
-// Wakeup bonus: 2ms (for sleeper fairness, improve interactive response, reduce jitter)
-#define SCHED_WAKEUP_GRAN_MS (MIN_TIMESLICE_MS / 5)
-
+/*      Externs     */
 extern u32 volatile jiffies;
 extern u32 jiffy;
 extern bitmap_t kernel_map;
 extern void task_switch(task_t *next);
 extern tss_t tss;
 
+/*      Task Management Globals     */
 static task_t *tasks_table[NR_TASKS];   // task table
 task_t *idle_task;               // idle (removed static)
 
 static list_t block_list;               // blocked task list
 static list_t sleep_list;               // sleep list
 
-// === CFS Ready Queue ===
-static rb_root_t cfs_ready_root = RB_ROOT; // rbtree root
-u32 cfs_task_count = 0; // ready task count
-static u64 cfs_min_vruntime = 0ULL; // min vruntime in tree
-static u32 cfs_total_weight = 0; // total weight
-
-// ===================================
-//     CFS Helper Functions
-// ===================================
-
-/**
- * @brief (!!!!) NEW: nice to weight map (!!!!)
- * (Approx Linux 2.6.23, NICE_0_WEIGHT = 1024 as base)
- * Index 0 maps to nice -20
- * Index 20 maps to nice 0
- * Index 39 maps to nice +19
- */
-static const u32 prio_to_weight[40] = {
- /* -20 */ 88761, 71755, 56864, 45169, 36357, 29110, 23358, 18788, 15122, 12173,
- /* -10 */  9809,  7915,  6387,  5169,  4194,  3355,  2684,  2157,  1737,  1399,
- /* 0 */   1024,   820,   655,   524,   420,   335,   268,   215,   172,   137,
- /* +10 */   110,    87,    70,    56,    45,    36,    29,    23,    18,    15
-};
-
-/**
- * @brief (!!!!) NEW: nice to weight conversion (!!!!)
- */
-static u32 nice_to_weight(int nice) {
-    if (nice < NICE_MIN) nice = NICE_MIN;
-    if (nice > NICE_MAX) nice = NICE_MAX;
-    
-    // nice -20 map to index 0
-    // nice 0   map to index 20
-    // nice +19 map to index 39
-    return prio_to_weight[nice - NICE_MIN]; 
-}
-
-
-/**
- * @brief (!!!!) NEW: Calculate and set task timeslice (based on weight) (!!!!)
- */
-static void set_timeslice(task_t *task, u32 total_weight) {
-    u32 slice_ms = MIN_TIMESLICE_MS; // default min
-
-    if (total_weight > 0) {
-        // (task->weight / cfs_total_weight) * SCHED_LATENCY_MS
-        u64 temp = ((u64)task->weight * SCHED_LATENCY_MS) / total_weight;
-        slice_ms = (u32)temp;
-    }
-
-    if (slice_ms < MIN_TIMESLICE_MS) { // ensure min
-        slice_ms = MIN_TIMESLICE_MS;
-    }
-
-    task->sched_slice = slice_ms; // save total slice (ms)
-    task->ticks = slice_ms / jiffy; // convert to clock ticks
-    if (task->ticks == 0) { // at least 1 tick
-        task->ticks = 1;
-    }
-}
-
-/**
- * @brief (!!!!) NEW: Insert task into CFS ready rbtree (!!!!)
- */
-static void cfs_enqueue(task_t *task) {
-    struct rb_node **link = &cfs_ready_root.rb_node;
-    struct rb_node *parent = NULL;
-    task_t *entry;
-
-    // vruntime check, update to min if smaller
-    if (task->vruntime < cfs_min_vruntime) {
-        task->vruntime = cfs_min_vruntime;
-    }
-
-    // 1. find insert position
-    while (*link) {
-        parent = *link;
-        entry = rb_entry(parent, task_t, cfs_node);
-        
-        // key is vruntime
-        if (task->vruntime < entry->vruntime) {
-            link = &(*link)->rb_left;
-        } else {
-            // equal vruntime, insert right
-            link = &(*link)->rb_right;
-        }
-    }
-
-    // 2. link new node
-    rb_set_parent(&task->cfs_node, parent);
-    task->cfs_node.rb_left = NULL;
-    task->cfs_node.rb_right = NULL;
-    rb_set_red(&task->cfs_node); // new node is red
-    
-    *link = &task->cfs_node;
-
-    // 3. fix rbtree balance
-    rb_insert_color(&task->cfs_node, &cfs_ready_root);
-    
-    // 4. update counters
-    cfs_task_count++;
-    cfs_total_weight += task->weight; 
-}
-
-/**
- * @brief (!!!!) NEW: Remove task from CFS ready rbtree (!!!!)
- */
-static task_t* cfs_dequeue(task_t *task) {
-    if (cfs_task_count > 0) {
-        rb_erase(&task->cfs_node, &cfs_ready_root); // remove from tree
-        cfs_task_count--;
-        cfs_total_weight -= task->weight; 
-    }
-    // clear node pointers
-    task->cfs_node.rb_parent_color = 0;
-    task->cfs_node.rb_left = NULL;
-    task->cfs_node.rb_right = NULL;
-    return task;
-}
-
-/**
- * @brief (!!!!) NEW: Pick next best task (tree leftmost node) (!!!!)
- */
-static task_t* cfs_pick_next() {
-    struct rb_node *leftmost = rb_first(&cfs_ready_root);
-    if (!leftmost) {
-        return NULL; // ready queue empty
-    }
-
-    task_t* task = rb_entry(leftmost, task_t, cfs_node);
-    
-    // (!!!!) KEY: update global min vruntime (!!!!)
-    cfs_min_vruntime = task->vruntime;
-    
-    return task;
-}
 
 // ===================================
 //     Core Task API Modify
@@ -439,7 +297,7 @@ pid_t task_fork() {
     task_build_stack(child);    // * ROP
 
     // === Add to CFS ready queue ===
-    cfs_enqueue(child);
+    sched_enqueue_task(child);
 
     return child->pid;
 }
@@ -500,7 +358,7 @@ void task_unblock(task_t *task) {
     }
 
     // === Add to CFS ready queue ===
-    cfs_enqueue(task);
+    sched_wakeup_task(task);
 }
 
 
@@ -520,72 +378,6 @@ task_t *running_task() {
     asm volatile(
         "movl %esp, %eax\n"
         "andl $0xfffff000, %eax\n");    // clear page offset, return 0x1000 or 0x2000
-}
-
-
-/**
- * @brief (!!!!) Core Scheduler Refactor (!!!!)
- * * Based on CFS (rbtree) scheduler
- */
-void schedule() {
-    assert(!get_interrupt_state());
-
-    task_t *current = running_task();
-    task_t *next = NULL;
-
-    // --- 1. Update current task vruntime (if not idle) ---
-    if (current != idle_task) {
-        // calc real runtime (ms)
-        u32 total_ticks = current->sched_slice / jiffy;
-        if (total_ticks == 0) total_ticks = 1;
-
-        u32 ran_ticks = total_ticks - current->ticks;
-        u32 delta_exec_ms = ran_ticks * jiffy;
-
-        if (delta_exec_ms > 0) {
-            // (!!!!) FIX: use NICE_0_WEIGHT as base
-            if (current->weight == 0) {
-                // (if weight is 0, is bug, should avoid at create)
-                // (but as safeguard, reset to default)
-                current->weight = NICE_0_WEIGHT;
-            }
-
-            // calc vruntime delta
-            u64 vruntime_delta = ((u64)delta_exec_ms * NICE_0_WEIGHT) / current->weight;
-            current->vruntime += vruntime_delta;
-        }
-    }
-
-    // --- 2. Put current task back (if RUNNING) ---
-    if (current->state == TASK_RUNNING && current != idle_task) { // (Original had bug, checked idle here)
-        current->state = TASK_READY;
-        cfs_enqueue(current);
-    }
-
-    // --- 3. Pick next task (min vruntime) ---
-    task_t *candidate = cfs_pick_next();
-
-    u32 current_total_weight = cfs_total_weight;
-
-    if (candidate) {
-        // --- 4. Remove from ready queue ---
-        next = cfs_dequeue(candidate);
-    } else {
-        next = idle_task;
-    }
-
-    // --- 5. Set new task timeslice ---
-    if (next != idle_task) {
-        set_timeslice(next, current_total_weight);
-    }
-
-    // --- 6. Switch to next task ---
-    assert(next != NULL);
-    next->state = TASK_RUNNING;
-    // next->ticks = next->sched_slice / jiffy; // (Already set in set_timeslice)
-
-    task_activate(next);
-    task_switch(next);
 }
 
 
@@ -621,9 +413,9 @@ static task_t *task_create(target_t target, const char *name, int nice, u32 uid)
     
     // === (!!!!) Init CFS fields (based on nice) (!!!!) ===
     task->nice = nice;
-    task->weight = nice_to_weight(nice); // use helper
+    task->weight = sched_nice_to_weight(nice); // use helper
     assert(task->weight > 0); // weight must be > 0
-    task->vruntime = cfs_min_vruntime; // start at min
+    task->vruntime = sched_get_min_vruntime(); // start at min
     
     // === Init lists ===
     // parent child list
@@ -635,7 +427,7 @@ static task_t *task_create(target_t target, const char *name, int nice, u32 uid)
 
     if (strcmp(task->name, "idle") != 0) {
         // === Add to CFS queue ===
-        cfs_enqueue(task);
+        sched_enqueue_task(task);
     }
 
     task->wakeup_time = 0; // init wakeup time
@@ -649,7 +441,7 @@ void task_to_user_mode(target_t target) {
 
     // (!!!!) ADD: user mode task start with default prio
     task->nice = NICE_DEFAULT;
-    task->weight = nice_to_weight(task->nice);
+    task->weight = sched_nice_to_weight(task->nice);
 
     task->vmap = kmalloc(sizeof(bitmap_t));
     void *buf = (void *)alloc_kpage(1);
@@ -718,12 +510,7 @@ void task_init() {
     list_init(&sleep_list);
     
     // === Init CFS ===
-    cfs_ready_root = RB_ROOT;
-    cfs_task_count = 0;
-    cfs_min_vruntime = 0ULL;
-    cfs_total_weight = 0; 
-    
-    // (Original: init ready_queues removed)
+    sched_init();
 
     task_setup();
 

@@ -3,6 +3,7 @@
 #include <libc/assert.h>
 #include <xjos/debug.h>
 #include <xjos/task.h>
+#include <xjos/sched.h>
 #include <xjos/xjos.h>
 extern void time_init();
 
@@ -31,7 +32,6 @@ u32 volatile beeping = 0;
 
 // (extern declare from task.c idle_task and cfs_task_count)
 extern task_t *idle_task;
-extern u32 cfs_task_count;
 extern bool task_wakeup(); // (!!!!) NEW
 
 
@@ -65,7 +65,7 @@ void clock_handler(int vector) {
     // 1. wakeup sleeping tasks
     bool woken_up = task_wakeup(); // (!!!!) NEW
     
-    // (Original task_aging() removed)
+    u32 cfs_task_count = sched_get_task_count();
     
     task_t *task = running_task();    
     assert(task->magic == XJOS_MAGIC);

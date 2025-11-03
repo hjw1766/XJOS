@@ -8,7 +8,6 @@
 #include <xjos/bitmap.h>
 #include <xjos/syscall.h>
 #include <xjos/list.h>
-#include <libc/string.h>
 #include <xjos/global.h>
 #include <xjos/arena.h>
 #include <xjos/rbtree.h>
@@ -132,7 +131,7 @@ static void cfs_enqueue(task_t *task) {
     rb_set_red(&task->cfs_node); // new node is red
     
     *link = &task->cfs_node;
-    
+
     // 3. fix rbtree balance
     rb_insert_color(&task->cfs_node, &cfs_ready_root);
     
@@ -493,7 +492,7 @@ void task_unblock(task_t *task) {
     // subtract weighted gran, improve interactive response, reduce jitter
     u32 gran_ms = SCHED_WAKEUP_GRAN_MS;
     // (!!!!) FIX: use NICE_0_WEIGHT as base
-    u64 bonus = ((u64)gran_ms * 1000 * NICE_0_WEIGHT) / task->weight;
+    u64 bonus = ((u64)gran_ms * NICE_0_WEIGHT) / task->weight;
     if (task->vruntime > bonus) {
         task->vruntime -= bonus;
     } else {
@@ -552,7 +551,7 @@ void schedule() {
             }
 
             // calc vruntime delta
-            u64 vruntime_delta = ((u64)delta_exec_ms * 1000 * NICE_0_WEIGHT) / current->weight;
+            u64 vruntime_delta = ((u64)delta_exec_ms * NICE_0_WEIGHT) / current->weight;
             current->vruntime += vruntime_delta;
         }
     }
@@ -710,8 +709,6 @@ static void task_setup() {
 extern void idle_thread();
 extern void init_thread();
 extern void test_thread();
-extern void high_prio_spinner(); // (!!!!) NEW
-extern void low_prio_spinner(); // (!!!!) NEW
 
 /**
  * @brief (!!!!) MODIFIED: task_init uses nice values (!!!!)
@@ -739,20 +736,7 @@ void task_init() {
     // 2. observer thread (init)
     // medium weight, most time sleep
     // nice 0 (weight 1024)
-    task_create(init_thread, "init", NICE_DEFAULT, NORMAL_USER); // NICE_DEFAULT = 0
+    task_create(init_thread, "init", NICE_MIN, NORMAL_USER); // NICE_DEFAULT = 0
 
-    // 3. high-weight CPU-heavy thread (high_spinner)
-    // (Original prio 5)
-    // Use nice -7 (weight 5169)
-    task_create(high_prio_spinner, "high_spinner", -7, KERNEL_USER); 
-    
-    // 4. low-weight CPU-heavy thread (low_spinner)
-    // (Original prio 4)
-    // Use nice +2 (weight 655)
-    // (5169 / 655 ≈ 7.89)
-    task_create(low_prio_spinner, "low_spinner", 2, KERNEL_USER);
-
-    // 5. test_thread (let it sleep, no part)
-    // nice 0 (weight 1024)
-    task_create(test_thread, "test", NICE_DEFAULT, KERNEL_USER);
+    task_create(test_thread, "test", NICE_MIN + 1, KERNEL_USER);
 }

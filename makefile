@@ -84,7 +84,7 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.asm
 $(BUILD_DIR)/kernel.bin: $(ENTRY_OBJ) $(OTHER_OBJS)
 	@mkdir -p $(dir $@)
 	@echo "LD $@"
-	$(LD) $(LDFLAGS) $(ENTRY_OBJ) $(OTHER_OBJS) $(LIBGCC) -o $@ -Ttext $(ENTRYPOINT)  # 修改：添加 $(LIBGCC)
+	$(LD) $(LDFLAGS) $(ENTRY_OBJ) $(OTHER_OBJS) $(LIBGCC) -o $@ -Ttext $(ENTRYPOINT)
 
 # --- Generate Final Image File ---
 $(BUILD_DIR)/system.bin: $(BUILD_DIR)/kernel.bin

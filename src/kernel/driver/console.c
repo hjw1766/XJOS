@@ -152,8 +152,7 @@ extern void start_beep();
  
 
 int32 console_write(const char *buf, u32 count) {
-    // ! dont use interrupt_disable() here
-    // bool intr = interrupt_disable();
+    bool intr = interrupt_disable();            // should turn off interrupt
 
     char ch;
     int32 nr = 0;
@@ -199,6 +198,6 @@ int32 console_write(const char *buf, u32 count) {
 
     set_cursor();
 
-    // set_interrupt_state(intr);
+    set_interrupt_state(intr);
     return nr;
 }

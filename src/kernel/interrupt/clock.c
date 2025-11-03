@@ -85,7 +85,7 @@ void clock_handler(int vector) {
     // 4. (!!!!) Preemption Check (!!!!)
     // if timeslice zero, OR
     // new task woken up (woken_up == true) AND ready queue not empty
-    if (task->ticks <= 0) {
+    if (task->ticks <= 0 || (woken_up && cfs_task_count > 0)) {
         schedule();
     }
 }

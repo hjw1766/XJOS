@@ -365,6 +365,17 @@ u32 keyboard_read(void *dev, char *buffer, u32 count) {
 }
 
 
+int keyboard_wrapper(void *dev, void *buf, size_t count, idx_t idx, int flags) {
+    (void)dev;
+    (void)idx;
+    (void)flags;
+
+    char *buffer = (char*)buf;
+
+    return (int)keyboard_read(dev, buffer, count);
+}
+
+
 void keyboard_init() {
     numlock_state = false;
     scrlook_state = false;
@@ -382,5 +393,5 @@ void keyboard_init() {
 
     device_install(DEV_CHAR, DEV_KEYBOARD, 
         NULL, "keyboard", 0, NULL, 
-        keyboard_read, NULL);
+        keyboard_wrapper, NULL);
 }

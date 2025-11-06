@@ -74,15 +74,32 @@ static void set_cursor() {
 }
 
 
+static void console_memset_16(u16 *dest, u16 val, size_t count) {
+    // e.g. 0x0720 -> 0x07200720
+    u32 val32 = (val << 16) | val;
+
+    size_t count32 = count / 2;
+
+    asm volatile(
+        "cld\n"         // edi++
+        "rep stosl\n"   // [edi] = eax, edi += 4
+        : "+D"(dest), "+c"(count32)
+        : "a"(val32)
+        : "memory"
+    );
+
+    if (count % 2) {      // e.g. count = 3
+        *dest = val;
+    }
+}
+
+
 void console_clear() {
     screen = MEM_BASE;
     pos = MEM_BASE;
     x = y = 0;
     
-    u16 *ptr = (u16 *)MEM_BASE;
-    while (ptr < (u16 *)MEM_END) {
-        *ptr++ = erase;
-    }
+    console_memset_16((u16 *)MEM_BASE, erase, WIDTH * HEIGHT);
 
     set_cursor();
     set_screen();
@@ -117,10 +134,7 @@ static void command_cr() {
 
 static void srcoll_up() {
     if (screen + SCR_SIZE + ROW_SIZE < MEM_END) {
-        u16 *ptr = (u16 *)(screen + SCR_SIZE);
-        for (size_t i = 0; i < WIDTH; i++) {
-            *ptr++ = erase;     // empty
-        }
+        console_memset_16((u16 *)(screen + SCR_SIZE), erase, WIDTH);
 
         screen += ROW_SIZE;
         pos += ROW_SIZE;
@@ -131,10 +145,7 @@ static void srcoll_up() {
         memcpy((void*)MEM_BASE, (void*)(screen + ROW_SIZE), SCR_SIZE - ROW_SIZE);
 
         // clear last row
-        u16 *ptr = (u16 *)(MEM_BASE + SCR_SIZE - ROW_SIZE);
-        for (size_t i = 0; i < WIDTH; i++) {
-            *ptr++ = erase;
-        }
+        console_memset_16((u16 *)(MEM_BASE + SCR_SIZE - ROW_SIZE), erase, WIDTH);
         // pos = mem_base + (y * row_size + x);
         // new pos = pos - offset(screen - mem_base)
         screen = MEM_BASE;
@@ -201,12 +212,21 @@ int32 console_write(void *dev, char *buf, u32 count) {
 }
 
 
+int console_write_wrapper(void *dev, void *buf, size_t count, idx_t idx, int flags) {
+    (void)idx;
+    (void)flags;
+
+    char *buffer = (char *)buf;
+
+    return (int)console_write(dev, buffer, count);
+}
+
+
 void console_init() {
     console_clear();
 
     device_install(
         DEV_CHAR, DEV_CONSOLE,
         NULL, "console", 0,
-        NULL, NULL, console_write
-    );
+        NULL, NULL, console_write_wrapper);
 }

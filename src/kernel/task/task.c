@@ -525,5 +525,7 @@ void task_init() {
     // nice 0 (weight 1024)
     task_create(init_thread, "init", NICE_MIN, NORMAL_USER); // NICE_DEFAULT = 0
 
-    task_create(test_thread, "test", NICE_MIN + 1, KERNEL_USER);
+    task_create(test_thread, "test", NICE_DEFAULT, KERNEL_USER);
+    task_create(test_thread, "test", NICE_DEFAULT, KERNEL_USER);
+    task_create(test_thread, "test", NICE_DEFAULT, KERNEL_USER);
 }

@@ -90,6 +90,8 @@ void device_init() {
         device->ioctl = NULL;
         device->read = NULL;
         device->write = NULL;
+
+        list_init(&device->request_list);
     }
 }
 
@@ -115,4 +117,63 @@ device_t *device_get(dev_t dev) {
     assert(device->type != DEV_NULL);
 
     return device;
+}
+
+
+static void do_request(request_t *req) {
+    switch (req->type) {
+        case REQ_READ:
+            device_read(req->dev, req->buf, req->count, req->idx, req->flags);
+            break;
+        case REQ_WRITE:
+            device_write(req->dev, req->buf, req->count, req->idx, req->flags);
+            break;
+        default:
+            panic("req type %d unknown!!!\n");
+            break;
+    }
+}
+
+
+void device_request(dev_t dev, void *buf, u8 count, idx_t idx, int flags, u32 type) {
+    device_t *device = device_get(dev);
+
+    assert(device->type == DEV_BLOCK);
+    idx_t offset = idx + device_ioctl(device->dev, DEV_CMD_SECTOR_START, 0, 0);
+    
+    // get parent device, /dev/hda1 -> /dev/hda
+    if (device->parent)   
+        device = device_get(device->parent);
+    
+    request_t *req = kmalloc(sizeof(request_t));
+
+    req->dev = dev;
+    req->buf = buf;
+    req->count = count;
+    req->idx = offset;
+    req->flags = flags;
+    req->type = type;
+    req->task = NULL;
+
+    bool empty = list_empty(&device->request_list);
+
+    // req to device reqlist
+    list_pushback(&device->request_list, &req->node);
+
+    if (!empty) {   // wait for device idle
+        req->task = running_task();
+        task_block(req->task, NULL, TASK_BLOCKED);
+    }
+
+    do_request(req);    // do req
+    list_remove(&req->node);    // remove req from device reqlist
+
+    kfree(req);   // free req
+
+    if (!list_empty(&device->request_list)) {
+        // wake up next req (FIFO)
+        request_t *next = list_entry(device->request_list.head.next, request_t, node);
+        assert(next->task->magic == XJOS_MAGIC);
+        task_unblock(next->task);
+    }
 }

@@ -32,7 +32,7 @@ typedef enum {
     TASK_DIED,          // task has died
 }task_state_t;
 
-typedef struct {
+typedef struct task_t {
     u32 *stack;              // kernel stack
     list_t children;         // child tasks list
     list_node_t sibling;     // parent task sibling node

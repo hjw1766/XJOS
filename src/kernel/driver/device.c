@@ -92,6 +92,7 @@ void device_init() {
         device->write = NULL;
 
         list_init(&device->request_list);
+        device->direct = DIRECT_UP;
     }
 }
 
@@ -121,6 +122,8 @@ device_t *device_get(dev_t dev) {
 
 
 static void do_request(request_t *req) {
+    LOGK("dev %d do requset idx %d\n", req->dev, req->idx);
+
     switch (req->type) {
         case REQ_READ:
             device_read(req->dev, req->buf, req->count, req->idx, req->flags);
@@ -129,9 +132,32 @@ static void do_request(request_t *req) {
             device_write(req->dev, req->buf, req->count, req->idx, req->flags);
             break;
         default:
-            panic("req type %d unknown!!!\n");
+            panic("req type %d unknown!!!\n", req->dev);
             break;
     }
+}
+
+
+static request_t *request_nextreq(device_t *device, request_t *req) {
+    list_t *list = &device->request_list;
+
+    // change direction at the ends
+    if (device->direct == DIRECT_UP && req->node.next == &list->head)
+        device->direct = DIRECT_DOWN;   // change direction
+    else if (device->direct == DIRECT_DOWN && req->node.prev == &list->head)
+        device->direct = DIRECT_UP;     // change direction
+
+    // get next req according to direction
+    void *next = NULL;
+    if (device->direct == DIRECT_UP)
+        next = req->node.next;
+    else
+        next = req->node.prev;
+
+    if (next == &list->head)
+        return NULL;
+
+    return list_entry(next, request_t, node);
 }
 
 
@@ -155,10 +181,14 @@ void device_request(dev_t dev, void *buf, u8 count, idx_t idx, int flags, u32 ty
     req->type = type;
     req->task = NULL;
 
+    LOGK("dev %d requset idx %d\n", req->dev, req->idx);
+
     bool empty = list_empty(&device->request_list);
 
     // req to device reqlist
-    list_pushback(&device->request_list, &req->node);
+    // list_pushback(&device->request_list, &req->node);
+
+    list_insert_sort(&device->request_list, &req->node, list_node_offset(request_t, node, idx));
 
     if (!empty) {   // wait for device idle
         req->task = running_task();
@@ -166,14 +196,14 @@ void device_request(dev_t dev, void *buf, u8 count, idx_t idx, int flags, u32 ty
     }
 
     do_request(req);    // do req
+
+    request_t *nextreq = request_nextreq(device, req);
     list_remove(&req->node);    // remove req from device reqlist
 
     kfree(req);   // free req
 
-    if (!list_empty(&device->request_list)) {
-        // wake up next req (FIFO)
-        request_t *next = list_entry(device->request_list.head.next, request_t, node);
-        assert(next->task->magic == XJOS_MAGIC);
-        task_unblock(next->task);
+    if (nextreq) {
+        assert(nextreq->task->magic == XJOS_MAGIC);
+        task_unblock(nextreq->task);   // wake up next req task
     }
 }

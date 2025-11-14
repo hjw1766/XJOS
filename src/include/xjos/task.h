@@ -57,7 +57,7 @@ typedef struct task_t {
     u64 vruntime; 			// virtual runtime (u64 avoid overflow)
     u32 weight; 			// task weight (from nice)
     u32 sched_slice; 		// calculated total timeslice (ms)
-    u32 ticks; 				// remaining timeslice (clock ticks)
+    int ticks; 				// remaining timeslice (clock ticks)
     u32 wakeup_time; 		// wakeup time (for sleep, in jiffies)
 
     struct rb_node cfs_node; // CFS ready queue rbtree node

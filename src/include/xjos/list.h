@@ -31,6 +31,18 @@ typedef struct {
     element_entry(type, member, ptr)
 
 /**
+ * @brief key - node offset in type
+ */
+#define list_node_offset(type, node, key) \
+    ((int)(&((type *)0)->key) - (int)(&((type *)0)->node))
+
+/**
+ * @brief ndoe + offset(key - node) => key
+ */
+#define list_node_key(node, offset) \
+    *(int *)((int)node + offset)
+
+/**
  * @brief Iterates over a list.
  * @param pos  The list_node_t* to use as a loop cursor.
  * @param list The list_t pointer to iterate over.
@@ -60,6 +72,7 @@ static inline void list_remove(list_node_t *node);
 static inline bool list_empty(list_t *list);
 static inline bool list_search(list_t *list, list_node_t *node_to_find);
 static inline u32 list_len(list_t *list);
+static inline void list_insert_sort(list_t *list, list_node_t *node, int offset);
 
 
 // ===================================
@@ -164,6 +177,26 @@ static _inline u32 list_len(list_t *list) {
         len++;
     }
     return len;
+}
+
+
+static _inline void list_insert_sort(list_t *list, list_node_t *node, int offset) {
+    list_node_t *anchor = &list->head;
+    int key = list_node_key(node, offset);
+
+    for (list_node_t *ptr = list->head.next; ptr != &list->head; ptr = ptr->next) {
+        int compare = list_node_key(ptr, offset);
+        if (compare > key) {    
+            anchor = ptr;
+            break;
+        }
+    }
+
+    assert(node->next == NULL);
+    assert(node->prev == NULL);
+
+    // insert before anchor
+    list_insert_before(anchor, node);
 }
 
 #endif /* XJOS_LIST_H */

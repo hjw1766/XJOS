@@ -6,3 +6,4 @@ src/bochsrc
 bochs/
 test/
 *.py
+note/

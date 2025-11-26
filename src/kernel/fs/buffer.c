@@ -92,7 +92,8 @@ static buffer_t *get_new_buffer() {
         bf->count = 0;
         bf->dirty = false;
         bf->valid = false;
-        spin_init(&bf->lock, "buffer_lock");
+        // todo
+        // spin_init(&bf->lock, "buffer_lock");
 
         buffer_count++;
         buffer_ptr++;
@@ -142,6 +143,11 @@ buffer_t *getblk(dev_t dev, idx_t block) {
     if (bf) {
         // cache hit
         bf->count++;
+        if (bf->count == 1) {
+            // remove from free list
+            assert(!list_empty(&free_list));
+            list_remove(&bf->rnode);
+        }
         return bf;
     }
 
@@ -192,7 +198,6 @@ void brelse(buffer_t *bf) {
     if (!bf)
         return;
     
-    spin_lock(&bf->lock);
     bf->count--;
     assert(bf->count >= 0);
 
@@ -208,7 +213,6 @@ void brelse(buffer_t *bf) {
             task_unblock(task);
         }
     }
-    spin_unlock(&bf->lock);
 }
 
 
@@ -247,3 +251,5 @@ void buffer_init() {
     buffer_data = (void *)(KERNEL_BUFFER_MEM + KERNEL_BUFFER_SIZE - BLOCK_SIZE);
     assert((u32)buffer_ptr < (u32)buffer_data);
 }
+
+// todo sync, flush all buffers to disk

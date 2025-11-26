@@ -36,5 +36,7 @@ void kernel_init() {
 
     super_init();
 
+    while (1);
+
     set_interrupt_state(true);
 }

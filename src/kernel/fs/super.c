@@ -81,13 +81,67 @@ super_block_t *read_super(dev_t dev) {
 }
 
 
+static void test_file_system(device_t *device, int test_inode_nr) {
+    LOGK("========================================\n");
+    LOGK("Testing file system on device %s (dev %d), Reading Inode %d\n", device->name, device->dev, test_inode_nr);
+
+    super_block_t *sb = read_super(device->dev);
+    assert(sb);
+
+    // calculate the block number where the inode table is located
+    int inode_table_blk = 2 + sb->desc->imap_blocks + sb->desc->zmap_blocks;
+
+    // read first inode
+    buffer_t *buf = bread(device->dev, inode_table_blk);
+    inode_desc_t *inode_table = (inode_desc_t *)buf->data; 
+    inode_desc_t *inode = &inode_table[test_inode_nr - 1]; // inode号从1开始  
+
+    LOGK("  [Inode %d] Mode: 0x%04x, Size: %d\n", test_inode_nr, inode->mode, inode->size);
+
+    // type
+    if (inode->mode & 0x4000) {
+        LOGK("    Type: Directory\n");
+        if (inode->zones[0]) {
+            buffer_t *dir_buf = bread(device->dev, inode->zones[0]);
+            dentry_t *entry = (dentry_t *)dir_buf->data;
+
+            while (entry->nr) {
+                LOGK("    [Dentry] Inode: %d, Name: %s\n", entry->nr, entry->name);
+                entry++;
+            }
+        }
+    } else if (inode->mode & 0x8000) {
+        LOGK("    Type: Regular File\n");
+        if (inode->zones[0]) {
+            buffer_t *file_buf = bread(device->dev, inode->zones[0]);
+            char *data = file_buf->data;
+
+            LOGK("    File Data (first 64 bytes or less):\n");
+            LOGK("data: %s\n", data);
+            LOGK("\n");
+        }
+    } else {
+        LOGK("    Type: Unknown\n");
+    }
+
+    LOGK("========================================\n");
+}
+
+
 static void mount_root() {
     LOGK("Mounting root file system...\n");
 
-    // 
-    device_t *device = device_find(DEV_IDE_PART, 0);
+    device_t *master = device_find(DEV_IDE_PART, 0);
+    root = read_super(master->dev);
 
-    root = read_super(device->dev);
+    device_t *slave = device_find(DEV_IDE_PART, 1);
+    read_super(slave->dev);
+
+    test_file_system(master, 1);
+    test_file_system(master, 7);
+
+    test_file_system(slave, 1);
+    test_file_system(slave, 2);
 }
 
 

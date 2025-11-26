@@ -13,6 +13,8 @@
 #define IMAP_NR 8   // inode map blocks number max
 #define ZMAP_NR 8   // zone map blocks number max
 
+#define BLOCK_BITS (BLOCK_SIZE * 8) // block map bits number
+
 typedef struct inode_desc_t {
     u16 mode;       // file type and attr(rwx bits)
     u16 uid;        // owner user id
@@ -65,5 +67,10 @@ typedef struct dentry_t {
 // dev contains super block
 super_block_t *get_super(dev_t dev);
 super_block_t *read_super(dev_t dev);
+
+idx_t balloc(dev_t dev);
+void bfree(dev_t dev, idx_t idx);
+idx_t ialloc(dev_t dev);
+void ifree(dev_t dev, idx_t idx);
 
 #endif // XJOS_FS_H

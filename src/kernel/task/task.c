@@ -11,6 +11,7 @@
 #include <xjos/list.h>
 #include <xjos/global.h>
 #include <xjos/arena.h>
+#include <fs/fs.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
@@ -409,6 +410,8 @@ static task_t *task_create(target_t target, const char *name, int nice, u32 uid)
     task->vmap = &kernel_map;
     task->pde = KERNEL_PAGE_DIR;
     task->brk = KERNEL_MEMORY_SIZE;
+    task->iroot = get_root_inode();
+    task->ipwd = get_root_inode();
     task->magic = XJOS_MAGIC;       // canary
     
     // === (!!!!) Init CFS fields (based on nice) (!!!!) ===

@@ -117,3 +117,79 @@ void ifree(dev_t dev, idx_t idx) {
     }
     bwrite(buf);        // todo
 }
+
+
+// get inode -> .block, if create and not exist, alloc blk
+idx_t bmap(inode_t *inode, idx_t block, bool create) {
+    assert(block >= 0 && block < TOTAL_BLOCK);
+
+    u16 index = block;
+
+    u16 *array = inode->desc->zones;
+
+    buffer_t *buf = inode->buf;
+    buf->count += 1;
+
+    int level = 0;      // 0-direct,1-indirect,2-double indirect
+    int divider = 1;
+
+    // CASE A: direct block (0 ~ 6)
+    if (block < DIRECT_BLOCK) {
+        // in inode->zones[0-6]
+        goto reckon;
+    }
+
+    block -= DIRECT_BLOCK;
+    // CASE B: indirect block (7 ~ 7 + 512)
+    if (block < INDIRECT1_BLOCK) {
+        // inode->zones[7]
+        index = DIRECT_BLOCK;
+        level = 1;
+        divider = 1;
+        goto reckon;
+    }
+
+    block -= INDIRECT1_BLOCK;
+    // CASE C: double indirect block
+    assert(block < INDIRECT2_BLOCK);
+
+    // inode->zones[8]
+    index = DIRECT_BLOCK + 1;
+    level = 2;
+    divider = BLOCK_INDEXES;
+
+reckon:
+    for (; level >= 0; level--) {
+        // 1.auto alloc logical
+        if (!array[index] && create) {
+            // alloc new blk
+            array[index] = balloc(inode->dev);
+            // write-back inode buf
+            buf->dirty = true;
+        }
+
+        /*  2.
+            once cycle, free count+1 buffer
+            subsequent cycle, brelse upper-level buffer
+        */
+        brelse(buf);
+
+        /*
+            3. end condition
+            if level==0, return direct block
+            if !array[index] create==false, return 0
+        */
+        if (level == 0 || !array[index]) {
+            return array[index];
+        }
+
+        // 4. down level(level != 0)
+        buf = bread(inode->dev, array[index]);
+        // get block index array
+        index = block / divider;
+        block = block % divider;
+        divider /= BLOCK_INDEXES;
+        array = (u16 *)buf->data;
+    }
+
+}

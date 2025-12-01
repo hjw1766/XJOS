@@ -14,6 +14,14 @@
 #define ZMAP_NR 8   // zone map blocks number max
 
 #define BLOCK_BITS (BLOCK_SIZE * 8) // block map bits number
+#define BLOCK_INODES (BLOCK_SIZE / sizeof(inode_desc_t)) // block inode number
+#define BLOCK_DENTRIES (BLOCK_SIZE / sizeof(dentry_t)) // block dir entries number
+#define BLOCK_INDEXES (BLOCK_SIZE / sizeof(u16)) // block index number
+
+#define DIRECT_BLOCK (7)                    // direct block numbers in inode
+#define INDIRECT1_BLOCK (BLOCK_INDEXES)      // indirect1 block numbers in inode
+#define INDIRECT2_BLOCK (BLOCK_INDEXES * BLOCK_INDEXES) // indirect2 block numbers in inode
+#define TOTAL_BLOCK (DIRECT_BLOCK + INDIRECT1_BLOCK + INDIRECT2_BLOCK) // total block numbers in inode
 
 typedef struct inode_desc_t {
     u16 mode;       // file type and attr(rwx bits)
@@ -72,5 +80,11 @@ idx_t balloc(dev_t dev);
 void bfree(dev_t dev, idx_t idx);
 idx_t ialloc(dev_t dev);
 void ifree(dev_t dev, idx_t idx);
+
+idx_t bmap(inode_t *inode, idx_t block, bool create);
+
+inode_t *get_root_inode();
+inode_t *iget(dev_t dev, idx_t nr);
+void iput(inode_t *inode);
 
 #endif // XJOS_FS_H

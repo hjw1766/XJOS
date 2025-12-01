@@ -46,6 +46,8 @@ typedef struct task_t {
     u32 brk;                 // process heap top
     int status;             // exit status
     pid_t waitpid;          // process waitpid result
+    struct inode_t *ipwd;   // current working directory
+    struct inode_t *iroot;  // root directory
     u32 magic;               // kernel magic number
 
     // === List Node ===

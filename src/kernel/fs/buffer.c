@@ -52,8 +52,6 @@ static buffer_t *get_from_hash_table(dev_t dev, idx_t block) {
     for (list_node_t *node = list->head.next; node != &list->head; node = node->next) {
         buffer_t *bf = list_entry(node, buffer_t, hnode);
         if (bf->dev == dev && bf->block == block) {
-            if (bf->count == 0)     // cache hit
-                list_remove(&bf->rnode); // remove from free list
             return bf;
         }
     }
@@ -142,6 +140,7 @@ buffer_t *getblk(dev_t dev, idx_t block) {
     buffer_t *bf = get_from_hash_table(dev, block);
     if (bf) {
         // cache hit
+        assert(bf->valid);
         bf->count++;
         if (bf->count == 1) {
             // remove from free list

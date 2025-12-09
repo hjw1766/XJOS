@@ -3,11 +3,63 @@
 #include <fs/stat.h>
 #include <xjos/syscall.h>
 #include <libc/string.h>
+#include <xjos/task.h>
 #include <libc/assert.h>
 #include <xjos/debug.h>
 
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
+
+#define P_EXEC IXOTH
+#define P_READ IROTH
+#define P_WRITE IWOTH
+
+
+static bool permission(inode_t *inode, u16 mask) {
+    u16 mode = inode->desc->mode;
+
+    if (!inode->desc->nlinks)
+        return false; // deleted file
+    
+    task_t *task = running_task();
+    if (task->uid == KERNEL_USER)
+        return true; // kernel has all permissions
+
+    u16 perm;
+    if (task->uid == inode->desc->uid)
+        perm = (mode >> 6) & 0b111;  // Owner
+    else if (task->gid == inode->desc->gid)
+        perm = (mode >> 3) & 0b111;  // Group
+    else
+        perm = mode & 0b111;          // Other
+
+    return (perm & mask) == mask;
+}
+
+
+// get first separator
+char *strsep(const char *str) {
+    char *ptr = (char *)str;
+    while (true) {
+        if (IS_SEPARATOR(*ptr))
+            return ptr;
+        
+        if (*ptr == EOS)
+            return NULL;
+    }
+}
+
+
+char *strrsep(const char *str) {
+    char *last = NULL;
+    char *ptr = (char *)str;
+    while (true) {
+        if (IS_SEPARATOR(*ptr))
+            last = ptr;
+        if (*ptr++ == EOS)
+            return last;
+    }
+}
 
 /**
  * 哈希相关
@@ -300,40 +352,95 @@ idx_t dir_lookup(inode_t *dir, const char *name, size_t len) {
     return 0;
 }
 
-#include <xjos/task.h>
 
-void dir_test() {
+// get pathname parent dir inode
+inode_t *named(char *pathname, char **next) {
+    inode_t *inode = NULL;
     task_t *task = running_task();
-    inode_t *inode = task->iroot;
-    inode->count++;
+    char *left = pathname;
+    if (IS_SEPARATOR(left[0])) {
+        inode = task->iroot;
+        left++; // skip '/'
+    } else if (left[0])
+        inode = task->ipwd;
+    else
+        return NULL;
 
-    char *next = NULL;
+    inode->count++;
+    *next = left;
+
+    if (!*left)     // "/" or "."
+        return inode;
+
+    char *right = strrsep(left);
+    if (!right || right < left)
+        return inode;  // single component (/home) 
+
+    right++; // skip separator
     dentry_t *entry = NULL;
     buffer_t *buf = NULL;
-
-    buf = find_entry(&inode, "hello.txt", &next, &entry);
-    if (!buf) { 
-        LOGK("hello.txt not found!\n"); 
-        return; 
+    while (true) {
+        buf = find_entry(&inode, left, next, &entry);
+        if (!buf)
+            goto failure;
+        
+        dev_t dev = inode->dev;
+        iput(inode);    // release parent dir inode
+        inode = iget(dev, entry->nr);
+        if (!ISDIR(inode->desc->mode) || !permission(inode, P_EXEC))
+            goto failure;
+        if (right == *next)
+            goto success; // last component
+        
+        left = *next;
     }
 
+success:
+    brelse(buf);
+    return inode;
 
-    idx_t nr = entry->nr; // 记下 hello.txt 的 inode 号
-    brelse(buf); // 释放读锁
-
-    buf = add_entry(inode, "newfile.txt", &entry);
-
-    entry->nr = nr;
-    buf->dirty = true;
-
-    inode_t *hello = iget(inode->dev, nr);
-    hello->desc->nlinks++;
-    hello->buf->dirty = true;
-
-    iput(hello);
-
+failure:
     brelse(buf);
     iput(inode);
+    return NULL;
+}
+
+
+inode_t *namei(char *pathname) {
+    char *next = NULL;
+    inode_t *dir = named(pathname, &next);
+    if (!dir)
+        return NULL;
+    if (!(*next))
+        return dir; // exact match '/'
     
-    bsync();
+    char *name = next;
+    dentry_t *entry = NULL;
+    buffer_t *buf = find_entry(&dir, name, &next, &entry);
+    if (!buf) {     // not found
+        iput(dir);
+        return NULL;
+    }
+
+    inode_t *inode = iget(dir->dev, entry->nr);
+
+    iput(dir);
+    brelse(buf);
+
+    return inode;
+}
+
+#include <libc/stdio.h>
+
+void dir_test() {
+    char pathname[] = "/";
+    char *name = NULL;
+    inode_t *inode = named(pathname, &name);
+    iput(inode);
+
+    inode = namei("/home/hello.txt");
+    int file_block = bmap(inode, 0, false);
+    printf("file_block: %d\n", file_block);
+    printf("file data %s\n", (char *)bread(inode->dev, file_block)->data);
+    iput(inode);
 }

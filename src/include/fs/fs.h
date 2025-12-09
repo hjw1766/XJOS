@@ -105,4 +105,7 @@ void dcache_init();
 idx_t dcache_lookup(struct inode_t *dir, const char *name, size_t len);
 void dcache_add(struct inode_t *dir, const char *name, size_t len, idx_t nr);
 
+inode_t *named(char *pathname, char **next); // get pathname parent dir inode
+inode_t *namei(char *pathname);              // get pathname inode
+
 #endif // XJOS_FS_H

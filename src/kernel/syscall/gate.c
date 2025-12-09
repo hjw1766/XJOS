@@ -60,6 +60,12 @@ int32 sys_write(fd_t fd, const char *buf, u32 len) {
     return 0;
 }
 
+
+int sys_sync() {
+    bsync();
+    return 0;
+}
+
 extern time_t sys_time();
 
 void syscall_init() {
@@ -84,4 +90,5 @@ void syscall_init() {
     syscall_table[SYS_NR_TIME] = sys_time;
 
     syscall_table[SYS_NR_UMASK] = sys_umask;
+    syscall_table[SYS_NR_SYNC] = sys_sync;
 }

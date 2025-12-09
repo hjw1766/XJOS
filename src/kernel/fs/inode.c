@@ -115,9 +115,6 @@ void iput(inode_t *inode) {
     if (!inode)
         return;
 
-    if (inode->buf->dirty)
-        bwrite(inode->buf);
-
     inode->count--;
     if (inode->count)
         return;
@@ -218,7 +215,74 @@ int inode_write(inode_t *inode, char *buf, u32 len, off_t offset) {
 
     inode->desc->mtime = inode->atime = time(); // update modify & access time
 
-    bwrite(inode->buf);
+    // bwrite(inode->buf);
 
     return offset - begin;  // 实际写入字节数
+}
+
+
+/**
+ * @param inode: 文件 inode
+ * @param array: 当前层级的块号数组（可能是 inode->zones，也可能是某个间接块里的数据）
+ * @param index: 要释放的块在数组中的下标
+ * @param level: 当前层级（0=数据块, 1=一级间接, 2=二级间接）
+*/
+static void inode_bfree(inode_t *inode, u16 *array, int index, int level) {
+    // 空快
+    if (!array[index])
+        return;
+
+    // level 0
+    if (!level) {
+        bfree(inode->dev, array[index]);
+        return;
+    }
+
+    // level > 0
+    // A. 先把这个索引块读到内存里
+    buffer_t *buf = bread(inode->dev, array[index]);
+
+    // B. 遍历索引块里的每一个条目 (Minix 1块1024字节 / 2字节u16 = 512个条目)
+    for (size_t i = 0; i < BLOCK_INDEXES; i++) {
+        // C. 递归释放下一级
+        inode_bfree(inode, (u16 *)buf->data, i, level - 1);
+    }
+
+    // D. 释放缓冲区
+    brelse(buf);
+    // E. 释放当前索引块
+    bfree(inode->dev, array[index]);
+}
+
+
+void inode_truncate(inode_t *inode)
+{   
+    if (!ISFILE(inode->desc->mode) && !ISDIR(inode->desc->mode)) {
+        return;
+    }
+
+    // 2. 释放直接块 (Level 0)
+    // 遍历 inode->zones[0] 到 zones[6]
+    for (size_t i = 0; i < DIRECT_BLOCK; i++) {
+        inode_bfree(inode, inode->desc->zones, i, 0); // Level 0
+        inode->desc->zones[i] = 0; // 内存里的指针清零
+    }
+
+    // 3. 释放一级间接块 (Level 1)
+    // 处理 inode->zones[7]
+    inode_bfree(inode, inode->desc->zones, DIRECT_BLOCK, 1); // Level 1
+    inode->desc->zones[DIRECT_BLOCK] = 0;
+
+    // 4. 释放二级间接块 (Level 2)
+    // 处理 inode->zones[8]
+    inode_bfree(inode, inode->desc->zones, DIRECT_BLOCK + 1, 2); // Level 2
+    inode->desc->zones[DIRECT_BLOCK + 1] = 0;
+
+    // 5. 更新元数据
+    inode->desc->size = 0;      // 文件大小变 0
+    inode->buf->dirty = true;   // 标记 inode 脏，等待写回
+    inode->desc->mtime = time();// 更新修改时间
+    
+    // 6. 强制写回磁盘（持久化修改）-> 延迟写回
+    // bwrite(inode->buf);
 }

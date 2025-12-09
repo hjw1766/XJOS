@@ -5,6 +5,7 @@
 #include <xjos/spinlock.h>
 #include <libc/stdio.h>
 #include <xjos/arena.h>
+#include <fs/buffer.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
@@ -45,5 +46,14 @@ void test_thread() {
     while (true) {
         // test();
         sleep(10);
+    }
+}
+
+
+void sync_thread() {
+    set_interrupt_state(true);
+    while (true) {
+        sync();
+        sleep(5000); // every 5 seconds
     }
 }

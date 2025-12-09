@@ -434,18 +434,33 @@ inode_t *namei(char *pathname) {
 #include <xjos/memory.h>
 
 void dir_test() {
-    inode_t *inode = namei("/d1/d2/d3/../../../hello.txt");
+    inode_t *inode = namei("/hello.txt");
+    if (!inode) {
+        return; 
+    }
 
-    char *buf = (char *)alloc_kpage(1);
-    int i  = inode_read(inode, buf, 1024, 0);
+    char buf[1024];
+    memset(buf, 'A', 1024);
+    for (int i=0; i<8; i++) {
+        inode_write(inode, buf, 1024, i*1024);
+    }
+    
+    LOGK("Before truncate: size = %d\n", inode->desc->size);
+    // 预期输出: 8192
+    
 
-    LOGK("dir_test: read %d bytes:\n%s\n", i, buf);
+    LOGK("Truncating file...\n");
+    inode_truncate(inode);
 
-    memset(buf, 'A', PAGE_SIZE);
-    inode_write(inode, buf, PAGE_SIZE, 0);
-    memset(buf, 'B', PAGE_SIZE);
-    inode_write(inode, buf, PAGE_SIZE, PAGE_SIZE);
+    
+    LOGK("After truncate: size = %d\n", inode->desc->size);
+    // 预期输出: 0
+    
+    int bytes_read = inode_read(inode, buf, 1024, 0);
+    LOGK("Read bytes after truncate: %d\n", bytes_read);
+    // 预期输出: 0 (EOF)
 
-    LOGK("bytes: %d\n", inode->desc->size);
-    bsync();
+    LOGK("Zone[0] after truncate = %d\n", inode->desc->zones[0]); 
+
+    iput(inode);
 }

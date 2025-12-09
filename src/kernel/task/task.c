@@ -458,6 +458,7 @@ long sys_nice(int increment) {
 extern void idle_thread();
 extern void init_thread();
 extern void test_thread();
+extern void sync_thread();
 
 // 修复启动时的崩溃：初始化 0号任务 (Boot Task)
 static void task_setup() {
@@ -487,4 +488,5 @@ void task_init() {
     idle_task = task_create(idle_thread, "idle", NICE_MAX, KERNEL_USER);
     task_create(init_thread, "init", NICE_DEFAULT, NORMAL_USER);
     task_create(test_thread, "test", NICE_DEFAULT, NORMAL_USER);
+    task_create(sync_thread, "sync", NICE_DEFAULT, KERNEL_USER);
 }

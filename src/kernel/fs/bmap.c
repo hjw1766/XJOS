@@ -32,7 +32,6 @@ idx_t balloc(dev_t dev) {
             break;
         }
     }
-    bwrite(buf);        // todo
     return bit;
 }
 
@@ -61,7 +60,6 @@ void bfree(dev_t dev, idx_t idx) {
         buf->dirty = true;
         break;
     }
-    bwrite(buf);        // todo
 }
 
 
@@ -86,7 +84,6 @@ idx_t ialloc(dev_t dev) {
             break;
         }
     }
-    bwrite(buf);        // todo
     return bit;
 }
 
@@ -115,7 +112,6 @@ void ifree(dev_t dev, idx_t idx) {
         buf->dirty = true;
         break;
     }
-    bwrite(buf);        // todo
 }
 
 

@@ -112,4 +112,7 @@ inode_t *namei(char *pathname);              // get pathname inode
 int inode_read(inode_t *inode, char *buf, u32 len, off_t offset);
 int inode_write(inode_t *inode, char *buf, u32 len, off_t offset);
 
+// free all data blocks of inode
+void inode_truncate(inode_t *inode);
+
 #endif // XJOS_FS_H

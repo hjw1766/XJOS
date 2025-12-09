@@ -106,3 +106,8 @@ time_t time() {
 mode_t umask(mode_t mask) {
     return _syscall1(SYS_NR_UMASK, (u32)mask);
 }
+
+
+void sync() {
+    _syscall0(SYS_NR_SYNC);
+}

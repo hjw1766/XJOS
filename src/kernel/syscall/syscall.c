@@ -98,6 +98,16 @@ int32 write(fd_t fd, const char *buf, u32 len) {
 }
 
 
+int mkdir(char *pathname, mode_t mode) {
+    return _syscall2(SYS_NR_MKDIR, (u32)pathname, (u32)mode);
+}
+
+
+int rmdir(char *pathname) {
+    return _syscall1(SYS_NR_RMDIR, (u32)pathname);
+}
+
+
 time_t time() {
     return _syscall0(SYS_NR_TIME);
 }

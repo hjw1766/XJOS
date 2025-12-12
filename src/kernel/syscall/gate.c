@@ -29,11 +29,8 @@ static void sys_default() {
     panic("Ssycall not implemented");
 }
 
-extern void dir_test();
 
 static u32 sys_test() {
-    dir_test();
-
     char ch;
     device_t *device;
 
@@ -66,6 +63,8 @@ int sys_sync() {
     return 0;
 }
 
+extern int sys_mkdir();
+extern int sys_rmdir();
 extern time_t sys_time();
 
 void syscall_init() {
@@ -85,6 +84,9 @@ void syscall_init() {
     syscall_table[SYS_NR_FORK] = task_fork;
 
     syscall_table[SYS_NR_BRK] = sys_brk;
+
+    syscall_table[SYS_NR_MKDIR] = sys_mkdir;
+    syscall_table[SYS_NR_RMDIR] = sys_rmdir;
 
     syscall_table[SYS_NR_WRITE] = sys_write;
     syscall_table[SYS_NR_TIME] = sys_time;

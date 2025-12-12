@@ -111,32 +111,20 @@ static buffer_t *get_free_buffer() {
 
         // 2. LRU back replace
         if (!list_empty(&free_list)) {
-            bf = list_entry(list_popback(&free_list), buffer_t, rnode);
+            bf = list_entry(list_popback(&free_list), buffer_t, lru_node);
             
-            // 原有的 write-back 逻辑已移除，因为 free_list 里只应该存干净的
-            
+            if (bf->dirty) {
+                // must write back first
+                bwrite(bf);
+            }
             hash_remove(bf);
 
             bf->valid = false;
-            bf->dirty = false;
+            bf->dirty = false;  // 多余操作
             return bf;
         }
 
-        // [新增] 3. 尝试从脏链表获取 (需要先写回磁盘)
-        if (!list_empty(&dirty_list)) {
-            bf = list_entry(list_popback(&dirty_list), buffer_t, rnode);
-            hash_remove(bf);
-
-            // 必须同步写回磁盘
-            bwrite(bf);
-
-            // 写回后，该 buffer 变为干净且可用
-            bf->valid = false;
-            bf->dirty = false;
-            return bf;
-        }
-
-        // 4. wait for buffer release
+        // 3. wait for buffer release
         task_block(running_task(), &wait_list, TASK_WAITING);
     }
 }
@@ -153,9 +141,8 @@ buffer_t *getblk(dev_t dev, idx_t block) {
         assert(bf->valid);
         bf->count++;
         if (bf->count == 1) {
-            // remove from list (could be free_list OR dirty_list)
-            // [新增] 无论在哪个链表，被复用时都需要移除
-            list_remove(&bf->rnode);
+            // 被复用
+            list_remove(&bf->lru_node);
         }
         return bf;
     }
@@ -198,7 +185,7 @@ void bwrite(buffer_t *bf) {
     // write to disk
     device_request(bf->dev, bf->data, BLOCK_SECS, bf->block * BLOCK_SECS, 0, REQ_WRITE);
 
-    bf->dirty = false;
+    bdirty(bf, false);
     bf->valid = true;
 } 
 
@@ -211,13 +198,8 @@ void brelse(buffer_t *bf) {
     assert(bf->count >= 0);
 
     if (bf->count == 0) {
-        // [修改] 根据 dirty 标志决定放入哪个链表
-        if (bf->dirty) {
-            list_push(&dirty_list, &bf->rnode); // 放入脏链表
-        } else {
-            list_push(&free_list, &bf->rnode);  // 放入空闲链表
-        }
-
+        // 只要引用归零， 就放入 free_list
+        list_push(&free_list, &bf->lru_node);
         // wake-up waiters
         if (!list_empty(&wait_list)) {
             // wake up one waiting task
@@ -232,20 +214,32 @@ void bsync() {
     // [修改] 优化后的 sync，只处理脏链表
     buffer_t *bf = NULL;
     int flushed_count = 0; // 新增统计
-    while (!list_empty(&dirty_list)) {
-        // 取出一个脏块
-        bf = list_entry(list_pop(&dirty_list), buffer_t, rnode);
-        
-        // 写回磁盘 (bwrite 内部会清除 dirty 标志)
-        bwrite(bf);
+    list_node_t *node = dirty_list.head.next;
+    while (node != &dirty_list.head) {
+        bf = list_entry(node, buffer_t, dirty_node);
+        node = node->next; // 先保存下一个节点，防止 bwrite 修改链表
 
-        // 写回后该 buffer 变干净了，放入 free_list 供回收使用
-        list_push(&free_list, &bf->rnode);
+        bwrite(bf);
         flushed_count++;
     }
 
     if (flushed_count > 0) {
         LOGK("bsync: [Dirty List Logic] Flushed %d blocks to disk.\n", flushed_count);
+    }
+}
+
+
+void bdirty(buffer_t *bf, bool dirty) {
+    if (bf->dirty == dirty)
+        return;
+    bf->dirty = dirty;
+
+    if (dirty) {
+        // 变脏
+        list_push(&dirty_list, &bf->dirty_node);
+    } else {
+        // 变干净
+        list_remove(&bf->dirty_node);
     }
 }
 

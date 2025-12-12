@@ -197,7 +197,7 @@ int inode_write(inode_t *inode, char *buf, u32 len, off_t offset) {
 
         // [RMW] 先读后写
         buffer_t *bf = bread(inode->dev, nr);
-        bf->dirty = true;
+        bdirty(bf, true); // 标记脏块
 
         u32 start = offset % BLOCK_SIZE; // 块内偏移
         char *ptr = bf->data + start;
@@ -209,7 +209,7 @@ int inode_write(inode_t *inode, char *buf, u32 len, off_t offset) {
         // [Expansion]
         if (offset > inode->desc->size) {
             inode->desc->size = offset;
-            inode->buf->dirty = true;
+            bdirty(inode->buf, true);
         }
 
         memcpy(ptr, buf, chars);
@@ -286,7 +286,7 @@ void inode_truncate(inode_t *inode)
 
     // 5. 更新元数据
     inode->desc->size = 0;      // 文件大小变 0
-    inode->buf->dirty = true;   // 标记 inode 脏，等待写回
+    bdirty(inode->buf, true);   // 标记 inode 脏，等待写回
     inode->desc->mtime = time();// 更新修改时间
     
     // 6. 强制写回磁盘（持久化修改）-> 延迟写回

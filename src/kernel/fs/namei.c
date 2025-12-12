@@ -163,6 +163,35 @@ void dcache_add(inode_t *dir, const char *name, size_t len, idx_t nr) {
 }
 
 
+// del cache entry
+void dcache_delete(inode_t *dir, const char *name, size_t len) {
+    u32 hash = str_hash(name, len);
+    u32 idx = hash % DCACHE_HASH_SIZE;
+
+    list_t *head = &dcache_hash_table[idx];
+    dcache_entry_t *entry;
+
+    list_for_each_entry(entry, head, hnode) {
+        if (entry->hash != hash)
+            continue;
+        if (entry->dir != dir)
+            continue;
+        if (memcmp(entry->name, name, len) == 0 && entry->name[len] == EOS) {
+            // Remove hash table and LRU list
+            list_remove(&entry->hnode);
+            list_remove(&entry->lru_node);
+
+            // reset entry
+            entry->dir = NULL;
+            entry->nr = 0;
+            // Add back to free list
+            list_push(&dcache_lru_list, &entry->lru_node);
+            return;
+        }
+    }
+}
+
+
 static bool match_name(const char *name, const char *entry_name, size_t entry_len, char **next) {
     // 1. memcmp asm 4byte compare
     if (memcmp(name, entry_name, entry_len) != 0)
@@ -299,7 +328,7 @@ buffer_t *add_entry(inode_t *dir, const char *name, dentry_t **result) {
             // 到达末尾，扩展文件大小
             entry->nr = 0;
             dir->desc->size = (i + 1) * sizeof(dentry_t);
-            dir->buf->dirty = true;
+            bdirty(dir->buf, true); // 标记目录 inode 脏
         }
 
         if (entry->nr == 0) {
@@ -311,9 +340,9 @@ buffer_t *add_entry(inode_t *dir, const char *name, dentry_t **result) {
             strlcpy(entry->name, name, NAME_LEN);
             
             dir->desc->mtime = time(); // 更新目录修改时间
-            dir->buf->dirty = true;
+            bdirty(dir->buf, true); // 标记目录 inode 脏
             
-            buf->dirty = true; // 标记目录块为脏
+            bdirty(buf, true); // 标记目录块为脏
             *result = entry;
             return buf;
         }
@@ -433,6 +462,60 @@ failure:
 }
 
 
+static bool is_empty(inode_t *inode) {
+    assert(ISDIR(inode->desc->mode));
+
+    int entries = inode->desc->size / sizeof(dentry_t);
+
+    if (entries < 2 || !inode->desc->zones[0]) {
+        LOGK("bad directory on dev %d\n", inode->dev);
+        return false;
+    }
+
+    idx_t i = 0;
+    idx_t block = 0;
+    buffer_t *buf = NULL;
+    dentry_t *entry;
+    int count = 0;
+
+    for (; i < entries; i++) {
+        // 跨块处理
+        if (!buf || (u32)entry >= (u32)buf->data + BLOCK_SIZE) {
+            if (buf) brelse(buf);
+
+            block = bmap(inode, i / BLOCK_DENTRIES, false);
+            if (block == 0) { // 稀疏文件空洞
+                i += BLOCK_DENTRIES - 1;
+                entry = NULL;
+                continue;
+            }
+            
+            buf = bread(inode->dev, block);
+            entry = (dentry_t *)buf->data;
+        }
+        
+        // 统计非空目录项, >2 直接判断非空
+        if (entry->nr) {
+            count++;
+            if (count > 2) {
+                if (buf) brelse(buf);
+                return false;
+            }
+        }
+        entry++;
+    }
+
+    if (buf) brelse(buf);
+
+    if (count < 2) {
+        LOGK("bad directory on dev %d\n", inode->dev);
+        return false;
+    }
+
+    return count == 2; // only . and ..
+}
+
+
 inode_t *namei(char *pathname) {
     char *next = NULL;
     inode_t *dir = named(pathname, &next);
@@ -466,59 +549,157 @@ inode_t *namei(char *pathname) {
     return inode;
 }
 
-#include <xjos/memory.h>
 
-void dir_test() {
-    LOGK("======== DIRTY LIST TEST START ========\n");
+int sys_mkdir(char *pathname, mode_t mode) {
+    char *next = NULL;
+    buffer_t *ebuf = NULL;
 
-    // 1. 准备数据
-    dev_t dev = 4; // 假设你的根设备号是 4
-    idx_t start_block = 100; // 从逻辑块 100 开始
-    int test_count = 20;     // 测试 20 个块
+    // parse path: return parent dir inode, next -> filename
+    inode_t *dir = named(pathname, &next);
+    inode_t *inode = NULL;
+    int ret = EOF;
 
-    LOGK("Step 1: Modifying %d blocks to fill dirty_list...\n", test_count);
-    for (int i = 0; i < test_count; i++) {
-        // 读取块
-        buffer_t *bf = bread(dev, start_block + i);
+    // 1. base checks
+    // parent dir not found
+    if (!dir)
+        goto rollback;
+    // path/to/(empty)
+    if (!*next)
+        goto rollback;
+    
+    if (!permission(dir, P_WRITE))
+        goto rollback;
+
+    // 2. caclulate name length
+    char *name = next;
+    size_t len = 0;
+    while (name[len] && !IS_SEPARATOR(name[len]))
+        len++;
         
-        // 修改内容并标记为脏
-        memset(bf->data, 0x55 + i, BLOCK_SIZE);
-        bf->dirty = true;
-
-        // 释放。根据新逻辑，由于 dirty=true，它们应该进入 dirty_list
-        brelse(bf);
+    // 3. check if file exists
+    if (dir_lookup(dir, name, len) != 0) {
+        LOGK("mkdir: cannot create directory \"%s\": File exists\n", name);
+        goto rollback;
     }
 
-    // 2. 验证 sync 的效果
-    LOGK("Step 2: Calling bsync() to flush dirty_list...\n");
-    // 如果 dirty_list 生效，bsync 内部循环应该只跑 20 次，而不是遍历几千个 buffer
-    bsync();
+    // 4. add new entry
+    dentry_t *entry = NULL;
+    ebuf = add_entry(dir, name, &entry);
 
-    // 3. 校验磁盘数据是否真的写进去了
-    LOGK("Step 3: Verifying flushed data...\n");
-    for (int i = 0; i < test_count; i++) {
-        buffer_t *bf = bread(dev, start_block + i);
-        
-        // 检查数据
-        if ((u8)bf->data[0] != (u8)(0x55 + i)) {
-            LOGK("Error: Block %d verify failed! Data mismatch.\n", start_block + i);
-            brelse(bf);
-            return;
-        }
-        
-        // 检查状态：写回后 dirty 应该为 false
-        if (bf->dirty != false) {
-            LOGK("Error: Block %d dirty flag not cleared after sync!\n", start_block + i);
-            brelse(bf);
-            return;
-        }
-        
-        brelse(bf);
-    }
+    // 新目录里面有 ..
+    dir->desc->nlinks++;    // update parent dir link count
+    bdirty(dir->buf, true);
+    
+    // 5. new inode
+    idx_t nr = ialloc(dir->dev);
+    entry->nr = nr;
+    bdirty(ebuf, true);
+    // 6. init inode
+    task_t *task = running_task();
+    inode = iget(dir->dev, nr);
+    inode->desc->gid = task->gid;
+    inode->desc->uid = task->uid;
+    inode->desc->mode = (mode & 0777 & ~task->umask) | IFDIR;
+    inode->desc->mtime = time();
+    inode->desc->nlinks = 2; // . and name
 
-    LOGK("Step 4: Checking reusable logic...\n");
-    // 再次调用 bsync()，此时 dirty_list 为空，应该瞬间执行完毕
-    bsync();
+    // 7. write new dir entries: . and ..
+    buffer_t *zbuf = bread(inode->dev, bmap(inode, 0, true));
+    bdirty(zbuf, true);
+    dentry_t *zentry = (dentry_t *)zbuf->data;
 
-    LOGK("======== DIRTY LIST TEST PASSED ========\n");
+    strcpy(zentry->name, "."); // current dir
+    zentry->nr = inode->nr;
+    zentry++;
+
+    strcpy(zentry->name, ".."); // parent dir
+    zentry->nr = dir->nr;
+    brelse(zbuf);    // sync at the end
+
+    // 8. update Dcache
+    dcache_add(dir, name, len, nr);
+
+    ret = 0; // success
+
+rollback:
+    if (ebuf) brelse(ebuf);
+    if (dir) iput(dir);
+    if (inode) iput(inode);
+    return ret;
+}
+
+
+int sys_rmdir(char *pathname) {
+    char *next = NULL;
+    buffer_t *ebuf = NULL;
+    inode_t *dir = named(pathname, &next); // parent dir
+    inode_t *inode = NULL;
+    int ret = EOF;
+
+    // 1. base checks
+    if (!dir) goto rollback;
+    if (!*next) goto rollback;
+    if (!permission(dir, P_WRITE)) goto rollback;
+
+    // Calculate name length for dcache_delete later
+    char *name = next;
+    size_t len = 0;
+    while (name[len] && !IS_SEPARATOR(name[len])) len++;
+
+    // 2. find target dentry
+    // Must use find_entry (not dir_lookup) because we need 'ebuf' to modify it
+    dentry_t *entry;
+    ebuf = find_entry(&dir, name, &next, &entry);
+    if (!ebuf) goto rollback; // not found
+
+    // 3. get target inode
+    inode = iget(dir->dev, entry->nr);
+    if (!inode) goto rollback;
+
+    // 4. Validation
+    if (inode == dir) goto rollback;       // cannot remove '.'
+    if (!ISDIR(inode->desc->mode)) goto rollback; // must be dir
+
+    // Check sticky bit (optional, based on your logic)
+    task_t *task = running_task();
+    if ((dir->desc->mode & ISVTX) && task->uid != inode->desc->uid)
+        goto rollback;
+
+    if (dir->dev != inode->dev || inode->count > 1)
+        goto rollback; // mount point or busy
+
+    // 5. check if empty
+    if (!is_empty(inode))
+        goto rollback;
+
+    // 6. Execution
+    assert(inode->desc->nlinks == 2);
+
+    inode_truncate(inode);
+    ifree(inode->dev, inode->nr);
+
+    inode->desc->nlinks = 0;
+    bdirty(inode->buf, true);
+    inode->nr = 0;
+
+    // update parent
+    dir->desc->nlinks--; // remove '..' count
+    dir->ctime = dir->atime = dir->desc->mtime = time();
+    bdirty(dir->buf, true);
+    assert(dir->desc->nlinks > 0);
+
+    // clear entry in parent dir
+    entry->nr = 0;
+    bdirty(ebuf, true);
+
+    // 7. Clear Dcache (Important!)
+    dcache_delete(dir, name, len);
+
+    ret = 0;
+
+rollback:
+    if (inode) iput(inode);
+    if (dir) iput(dir);
+    if (ebuf) brelse(ebuf);
+    return ret;
 }

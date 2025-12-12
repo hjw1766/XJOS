@@ -18,6 +18,8 @@ typedef enum {
     SYS_NR_TIME = 13,
     SYS_NR_GETPID = 20,
     SYS_NR_SYNC = 36,
+    SYS_NR_MKDIR = 39,
+    SYS_NR_RMDIR = 40,
     SYS_NR_BRK = 45,
     SYS_NR_UMASK = 60,
     SYS_NR_GETPPID = 64,
@@ -42,6 +44,9 @@ void exit(int status);
 int32 brk(void *addr);
 
 int32 write(fd_t fd, const char *buf, u32 len);
+
+int mkdir(char *pathname, mode_t mode);
+int rmdir(char *pathname);
 
 time_t time();
 

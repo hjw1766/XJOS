@@ -28,7 +28,7 @@ idx_t balloc(dev_t dev) {
         bit = bitmap_scan(&map, 1);
         if (bit != EOF) {
             assert(bit < sb->desc->zones);
-            buf->dirty = true;
+            bdirty(buf, true);
             break;
         }
     }
@@ -57,7 +57,7 @@ void bfree(dev_t dev, idx_t idx) {
         assert(bitmap_test(&map, idx));
         bitmap_set(&map, idx, 0);
 
-        buf->dirty = true;
+        bdirty(buf, true);
         break;
     }
 }
@@ -80,7 +80,7 @@ idx_t ialloc(dev_t dev) {
         bit = bitmap_scan(&map, 1);
         if (bit != EOF) {
             assert(bit < sb->desc->inodes);
-            buf->dirty = true;
+            bdirty(buf, true);
             break;
         }
     }
@@ -109,7 +109,7 @@ void ifree(dev_t dev, idx_t idx) {
         assert(bitmap_test(&map, idx));
         bitmap_set(&map, idx, 0);
 
-        buf->dirty = true;
+        bdirty(buf, true);
         break;
     }
 }
@@ -168,10 +168,10 @@ reckon:
             array[index] = new_block;
             buffer_t *new_buf = bread(inode->dev, array[index]);
             memset(new_buf->data, 0, BLOCK_SIZE);
-            new_buf->dirty = true;
+            bdirty(new_buf, true);
             brelse(new_buf);
             // write-back inode buf
-            buf->dirty = true;
+            bdirty(buf, true);
         }
 
         /*  2.

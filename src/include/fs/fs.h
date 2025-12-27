@@ -4,6 +4,7 @@
 #include <xjos/types.h>
 #include <xjos/list.h>
 
+#define MAX_PATH_LEN 1024
 #define BLOCK_SIZE 1024 // block size in bytes
 #define SECTOR_SIZE 512
 
@@ -109,6 +110,12 @@ typedef struct file_t {
     int flags;          // file flag
     int mode;           // file mode
 } file_t;
+
+typedef enum whence_t {
+    SEEK_SET = 1,  // 直接设置偏移
+    SEEK_CUR,      // 当前位置偏移
+    SEEK_END       // 结束位置偏移
+} whence_t;
 
 // dev contains super block
 super_block_t *get_super(dev_t dev);

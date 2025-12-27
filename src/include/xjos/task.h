@@ -72,6 +72,7 @@ typedef struct task_t {
     char name[TASK_NAME_LEN];// 任务名称
     int32 status;            // 退出状态码 (exit code)
     pid_t waitpid;           // 正在等待的子进程 PID
+    char *pwd;              // 当前工作目录路径字符串
 
     // === 3. 内存管理 ===
     u32 pde;                 // 页目录表物理地址 (CR3)

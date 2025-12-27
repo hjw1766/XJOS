@@ -13,6 +13,7 @@ typedef enum {
     SYS_NR_TEST,
     SYS_NR_EXIT = 1,
     SYS_NR_FORK = 2,
+    SYS_NR_READ = 3,
     SYS_NR_WRITE = 4,
     SYS_NR_OPEN = 5,
     SYS_NR_CLOSE = 6,
@@ -20,16 +21,20 @@ typedef enum {
     SYS_NR_CREAT = 8,
     SYS_NR_LINK = 9,
     SYS_NR_UNLINK = 10,
+    SYS_NR_CHDIR = 12,
     SYS_NR_TIME = 13,
+    SYS_NR_LSEEK = 19,
     SYS_NR_GETPID = 20,
     SYS_NR_SYNC = 36,
     SYS_NR_MKDIR = 39,
     SYS_NR_RMDIR = 40,
     SYS_NR_BRK = 45,
     SYS_NR_UMASK = 60,
+    SYS_NR_CHROOT = 61,
     SYS_NR_GETPPID = 64,
     SYS_NR_YIELD = 158,
-    SYS_NR_SLEEP = 162
+    SYS_NR_SLEEP = 162,
+    SYS_NR_GETCWD = 183,
 }syscall_t;
 
 
@@ -54,7 +59,13 @@ fd_t creat(char *filename, int mode);
 
 void close(fd_t fd);
 
-int32 write(fd_t fd, const char *buf, u32 len);
+int read(fd_t fd, char *buf, int len);
+int write(fd_t fd, char *buf, int len);
+int lseek(fd_t fd, off_t offset, int whence);
+
+char *getcwd(char *buf, size_t size);
+int chdir(char *pathname);
+int chroot(char *pathname);
 
 int mkdir(char *pathname, mode_t mode);
 int rmdir(char *pathname);

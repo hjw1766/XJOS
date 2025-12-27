@@ -93,15 +93,35 @@ int32 brk(void *addr) {
 }
 
 
-int32 write(fd_t fd, const char *buf, u32 len) {
+int read(fd_t fd, char *buf, int len) {
+    return _syscall3(SYS_NR_READ, fd, (u32)buf, len);
+}
+
+
+int write(fd_t fd, char *buf, int len) {
     return _syscall3(SYS_NR_WRITE, fd, (u32)buf, len);
 }
 
-
-fd_t open(char *filename, int flags, int mode) {
-    return _syscall3(SYS_NR_OPEN, (u32)filename, flags, mode);
+int lseek(fd_t fd, off_t offset, int whence) {
+    return _syscall3(SYS_NR_LSEEK, fd, (u32)offset, whence);
 }
 
+char *getcwd(char *buf, size_t size) {
+    return (char *)_syscall2(SYS_NR_GETCWD, (u32)buf, (u32)size);
+}
+
+int chdir(char *pathname) {
+    return _syscall1(SYS_NR_CHDIR, (u32)pathname);
+}
+
+int chroot(char *pathname) {
+    return _syscall1(SYS_NR_CHROOT, (u32)pathname);
+}
+
+fd_t open(char *filename, int flags, int mode)
+{
+    return _syscall3(SYS_NR_OPEN, (u32)filename, flags, mode);
+}
 
 fd_t creat(char *filename, int mode) {
     return _syscall2(SYS_NR_CREAT, (u32)filename, (u32)mode);

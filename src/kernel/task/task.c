@@ -234,6 +234,10 @@ pid_t task_fork() {
     if (child->ipwd) child->ipwd->count++;
     if (child->iroot) child->iroot->count++;
 
+    // 深拷贝 pwd
+    child->pwd = kmalloc(MAX_PATH_LEN);
+    strcpy(child->pwd, parent->pwd);
+
 
     // 3. 调度初始化
     child->vruntime = sched_get_min_vruntime();
@@ -285,8 +289,12 @@ static task_t *task_create(target_t target, const char *name, int nice, u32 uid)
     task->pde = KERNEL_PAGE_DIR;
     
     task->brk = KERNEL_MEMORY_SIZE;
-    task->iroot = get_root_inode();
-    task->ipwd = get_root_inode();
+    task->iroot = task->ipwd = get_root_inode();
+    task->iroot->count += 2; // 引用计数增加
+
+    task->pwd = kmalloc(MAX_PATH_LEN);
+    strcpy(task->pwd, "/");
+    
     task->umask = 0022; 
 
     task->nice = nice;
@@ -316,6 +324,8 @@ static task_t *task_create(target_t target, const char *name, int nice, u32 uid)
     return task;
 }
 
+extern void sys_close();
+
 void task_exit(int status) {
     task_t *task = running_task();
     task->state = TASK_DIED;
@@ -331,6 +341,18 @@ void task_exit(int status) {
         }
         kfree(task->vmap);
     }
+
+    kfree(task->pwd);
+    iput(task->ipwd);
+    iput(task->iroot);
+
+    for (size_t i = 0; i < TASK_FILE_NR; i++) {
+        file_t *file = task->files[i];
+        if (file) {
+            sys_close(i);
+        }
+    }
+
 
     // 3. 处理孤儿进程：将当前进程的子进程过继给 init (PID 1)
     task_t *parent = tasks_table[task->ppid];

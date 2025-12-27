@@ -6,6 +6,7 @@
 #include <libc/stdio.h>
 #include <xjos/arena.h>
 #include <fs/buffer.h>
+#include <libc/string.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
@@ -28,11 +29,18 @@ void idle_thread() {
 
 
 static void user_init_thread() {
-    fd_t fd = open("/world.txt", O_CREAT | O_RDWR, 0755);
-    close(fd);
+    char buf[256];
 
+    chroot("/d1");
+    chdir("/d2");
+    getcwd(buf, sizeof(buf));
+    printf("User init thread started in dir: %s\n", buf);
+    
+    char ch;
     while (true) {
-        sleep(1000);
+        read(stdin, &ch, 1);
+        write(stdout, &ch, 1);
+        sleep(10);
     }
 }
 

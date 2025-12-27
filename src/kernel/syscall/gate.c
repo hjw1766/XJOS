@@ -31,31 +31,10 @@ static void sys_default() {
 
 
 static u32 sys_test() {
-    char ch;
-    device_t *device;
-
-    device = device_find(DEV_KEYBOARD, 0);
-    assert(device);
-    device_read(device->dev, &ch, 1, 0, 0);
-
-    device = device_find(DEV_CONSOLE, 0);
-    assert(device);
-    device_write(device->dev, &ch, 1, 0, 0);
-
     return 255;
 }
 
-extern int32 console_write();
 extern mode_t sys_umask();
-
-int32 sys_write(fd_t fd, const char *buf, u32 len) {
-    if (fd == stdout || fd == stderr) {
-        return console_write(NULL, buf, len);
-    }
-
-    panic("Invalid file descriptor %d", fd);
-    return 0;
-}
 
 
 int sys_sync() {
@@ -68,6 +47,14 @@ extern int sys_rmdir();
 
 extern int sys_link();
 extern int sys_unlink();
+
+extern int sys_read();
+extern int sys_write();
+extern int sys_lseek();
+
+extern int sys_chdir();
+extern int sys_chroot();
+extern char *sys_getcwd();
 
 extern int sys_create();
 extern fd_t sys_open();
@@ -103,9 +90,16 @@ void syscall_init() {
     syscall_table[SYS_NR_LINK] = sys_link;
     syscall_table[SYS_NR_UNLINK] = sys_unlink;
 
+    syscall_table[SYS_NR_READ] = sys_read;
     syscall_table[SYS_NR_WRITE] = sys_write;
+    syscall_table[SYS_NR_LSEEK] = sys_lseek;
+
     syscall_table[SYS_NR_TIME] = sys_time;
 
     syscall_table[SYS_NR_UMASK] = sys_umask;
     syscall_table[SYS_NR_SYNC] = sys_sync;
+
+    syscall_table[SYS_NR_CHDIR] = sys_chdir;
+    syscall_table[SYS_NR_CHROOT] = sys_chroot;
+    syscall_table[SYS_NR_GETCWD] = sys_getcwd;
 }

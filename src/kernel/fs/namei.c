@@ -44,7 +44,7 @@ char *strsep(const char *str) {
         if (IS_SEPARATOR(*ptr))
             return ptr;
         
-        if (*ptr == EOS)
+        if (*ptr++ == EOS)
             return NULL;
     }
 }
@@ -895,4 +895,131 @@ rollback:
     iput(dir);
     iput(inode);
     return NULL;
+}
+
+
+char *sys_getcwd(char *buf, size_t size) {
+    task_t *task = running_task();
+    strlcpy(buf, task->pwd, size);
+    return buf;
+}
+
+
+void abspath(char *pwd, const char *pathname) {
+    char *cur = NULL;
+    char *ptr = NULL;
+    if (IS_SEPARATOR(pathname[0])) {
+        cur = pwd + 1; // skip '/'
+        *cur = 0;   // truncate
+        pathname++; // skip '/'
+    } else {
+        // exp. pwd = /usr/bin/, cur -> l = '\0'
+        // pwd = /usr/'\0'in
+        cur = strrsep(pwd) + 1; // skip to end '/'
+        *cur = 0;   // truncate
+    }
+
+    while (pathname[0]) {
+        ptr = strsep(pathname);
+        if (!ptr)
+            break;
+        
+        // 第一个/之前的部分
+        int len = (ptr - pathname) + 1;
+        *ptr = '/';
+
+        if (!memcmp(pathname, "./", 2)) {
+            // skip
+        } else if (!memcmp(pathname, "../", 3)) {
+            // back to parent dir
+
+            // cur - 1 = '/', dont delate root '/'
+            if (cur - 1 != pwd) {
+                //exp. pwd = /home/usr/, cur -> /' '
+                *(cur - 1) = 0; //pwd = /home/usr'\0'
+                
+                // cur -> 'u'
+                cur = strrsep(pwd) + 1; // move cur to end
+
+                // pwd = /home/'\0'
+                *cur = 0; // truncate
+            }
+        } else {
+            // normal name
+
+            //exp.  pathname = "bin/"
+            // copy to pwd
+            strlcpy(cur, pathname, len + 1);
+
+            cur += len; // move cur
+        }
+
+        pathname += len; // move pathname
+    }
+
+    // while break, handle last part
+    if (!pathname[0])
+        return;
+    if (!strcmp(pathname, "."))
+        return;
+
+    if (strcmp(pathname, "..")) {
+        // dont ..
+        strcpy(cur, pathname);
+
+        cur += strlen(pathname);
+        *cur = '/'; // append '/'
+        return;
+    }
+
+    if (cur - 1 != pwd) {
+        //back to parent dir
+        *(cur - 1) = 0;
+        cur = strrsep(pwd) + 1;
+        *cur = 0;
+    }
+}
+
+
+int sys_chdir(char *pathname) {
+    task_t *task = running_task();
+    inode_t *inode = namei(pathname);
+    if (!inode)
+        goto rollback;
+    if (!ISDIR(inode->desc->mode) || inode == task->ipwd)
+        goto rollback;
+    if (!permission(inode, P_EXEC))
+        goto rollback;
+
+    // update pwd
+    abspath(task->pwd, pathname);
+    iput(task->ipwd);
+    task->ipwd = inode;
+
+    return 0;
+
+rollback:
+    iput(inode);
+    return EOF;
+}
+
+
+int sys_chroot(char *pathname) {
+    task_t *task = running_task();
+    inode_t *inode = namei(pathname);
+    if (!inode)
+        goto rollback;
+    if (!ISDIR(inode->desc->mode) || inode == task->iroot)
+        goto rollback;
+    if (!permission(inode, P_EXEC))
+        goto rollback;
+
+    iput(task->iroot);
+    task->iroot = inode;    // change root inode
+
+    return 0;
+
+rollback:
+    iput(inode);
+    return EOF;    
 }

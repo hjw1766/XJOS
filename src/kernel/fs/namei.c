@@ -594,10 +594,8 @@ int sys_mkdir(char *pathname, mode_t mode) {
     // 4. add new entry
     dentry_t *entry = NULL;
     ebuf = add_entry(dir, name, &entry);
-
-    // 新目录里面有 ..
-    dir->desc->nlinks++;    // update parent dir link count
-    bdirty(dir->buf, true);
+    if (!ebuf)
+        goto rollback;
     
     // 5. new inode
     idx_t nr = ialloc(dir->dev);
@@ -611,23 +609,35 @@ int sys_mkdir(char *pathname, mode_t mode) {
     inode->desc->mode = (mode & 0777 & ~task->umask) | IFDIR;
     inode->desc->mtime = time();
     inode->desc->nlinks = 2; // . and name
+    inode->desc->size = 2 * sizeof(dentry_t); // . and ..
+    bdirty(inode->buf, true);
 
     // 7. write new dir entries: . and ..
     buffer_t *zbuf = bread(inode->dev, bmap(inode, 0, true));
-    bdirty(zbuf, true);
+    memset(zbuf->data, 0, BLOCK_SIZE);
+
     dentry_t *zentry = (dentry_t *)zbuf->data;
 
+    memset(zentry->name, 0, NAME_LEN);
     strcpy(zentry->name, "."); // current dir
     zentry->nr = inode->nr;
     zentry++;
 
+    memset(zentry->name, 0, NAME_LEN);
     strcpy(zentry->name, ".."); // parent dir
     zentry->nr = dir->nr;
+
+    bdirty(zbuf, true);
     brelse(zbuf);    // sync at the end
 
-    // 8. update Dcache
+    // 8. update parent dir link count
+    dir->desc->nlinks++;
+    dir->desc->mtime = time();
+    bdirty(dir->buf, true);
+    
+    // 9. update Dcache
     dcache_add(dir, name, path_len(name), nr);
-
+    
     ret = 0; // success
 
 rollback:
@@ -652,6 +662,7 @@ int sys_rmdir(char *pathname) {
 
     // Calculate name length for dcache_delete later
     char *name = next;
+    size_t name_len = path_len(name);   // invoke find_entry before cal len
 
     // 2. find target dentry
     // Must use find_entry (not dir_lookup) because we need 'ebuf' to modify it
@@ -700,7 +711,7 @@ int sys_rmdir(char *pathname) {
     bdirty(ebuf, true);
 
     // 7. Clear Dcache (Important!)
-    dcache_delete(dir, name, path_len(name));
+    dcache_delete(dir, name, name_len);
 
     ret = 0;
 
@@ -713,7 +724,7 @@ rollback:
 
 
 int sys_link(char *oldname, char *newname) {
-    int ret = 0;
+    int ret = EOF;
     buffer_t *buf = NULL;
     inode_t *dir = NULL;
     inode_t *inode = namei(oldname);
@@ -833,7 +844,7 @@ inode_t *inode_open(char *pathname, int flag, int mode) {
     if (!dir)
         goto rollback;
     if (!*next)   // exact match
-        goto rollback;
+        return dir;
     
     if ((flag & O_TRUNC) && ((flag & O_ACCMODE) == O_RDONLY))
         goto rollback; // cannot truncate read-only file
@@ -878,8 +889,11 @@ inode_t *inode_open(char *pathname, int flag, int mode) {
     dcache_add(dir, name, path_len(name), inode->nr);
 
 makeup:
-    if (ISDIR(inode->desc->mode) || !permission(inode, flag & O_ACCMODE))
-        goto rollback;
+    if (!permission(inode, flag & O_ACCMODE))
+        goto rollback; // no permission
+    
+    if (ISDIR(inode->desc->mode) && (flag & O_ACCMODE) != O_RDONLY)
+        goto rollback; // open dir in read-only mode
     
     inode->atime = time();
 
@@ -901,6 +915,11 @@ rollback:
 char *sys_getcwd(char *buf, size_t size) {
     task_t *task = running_task();
     strlcpy(buf, task->pwd, size);
+
+    size_t len = strlen(buf);
+    if (len > 1 && buf[len - 1] == '/')
+        buf[len - 1] = '\0'; // remove trailing '/'
+
     return buf;
 }
 
@@ -991,6 +1010,11 @@ int sys_chdir(char *pathname) {
     if (!permission(inode, P_EXEC))
         goto rollback;
 
+    if (inode == task->ipwd) {  // same dir
+        iput(inode);
+        return 0;
+    }
+
     // update pwd
     abspath(task->pwd, pathname);
     iput(task->ipwd);
@@ -1013,6 +1037,11 @@ int sys_chroot(char *pathname) {
         goto rollback;
     if (!permission(inode, P_EXEC))
         goto rollback;
+
+    if (inode == task->iroot) {  // same dir
+        iput(inode);
+        return 0;
+    }
 
     iput(task->iroot);
     task->iroot = inode;    // change root inode

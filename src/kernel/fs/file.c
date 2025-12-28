@@ -1,4 +1,5 @@
 #include <fs/fs.h>
+#include <fs/stat.h>
 #include <libc/assert.h>
 #include <xjos/task.h>
 #include <drivers/device.h>
@@ -10,7 +11,7 @@ file_t file_table[FILE_NR];
 
 
 file_t *get_file() {
-    for (size_t i = 3; i < FILE_NR; i++) {
+    for (size_t i = 0; i < FILE_NR; i++) {
         file_t *file = &file_table[i];
         if (!file->count) {
             file->count++;
@@ -52,13 +53,17 @@ fd_t sys_open(char *filename, int flags, int mode) {
 
     task_t *task = running_task();
     fd_t fd = task_get_fd(task);
+    if (fd == EOF) {
+        iput(inode);
+        return EOF;
+    }
+
     file_t *file = get_file();
     assert(task->files[fd] == NULL);
     task->files[fd] = file;
 
     file->inode = inode;
     file->flags = flags;
-    file->count = 1;
     file->offset = 0;
     file->mode = inode->desc->mode;
 
@@ -83,10 +88,15 @@ int sys_read(fd_t fd, char *buf, int len) {
 
     // no stdin other files
 
+    if (fd < 0 || fd >= TASK_FILE_NR)
+        return EOF;
+
     task_t *task = running_task();
     file_t *file = task->files[fd];
-    assert(file);
-    assert(len > 0);
+    if (!file)
+        return EOF;
+    if (len <= 0)
+        return EOF;
 
     if ((file->flags & O_ACCMODE) == O_WRONLY)
         return EOF;
@@ -107,10 +117,15 @@ int sys_write(fd_t fd, char *buf, int len) {
         return device_write(device->dev, buf, len, 0, 0);
     }
 
+    if (fd < 0 || fd >= TASK_FILE_NR)
+        return EOF;
+
     task_t *task = running_task();
     file_t *file = task->files[fd];
-    assert(file);
-    assert(len > 0);
+    if (!file)
+        return EOF;
+    if (len <= 0)
+        return EOF;
 
     if ((file->flags & O_ACCMODE) == O_RDONLY)
         return EOF;
@@ -139,31 +154,49 @@ void sys_close(fd_t fd) {
 
 
 int sys_lseek(fd_t fd, int offset, int whence) {
-    assert(fd < TASK_FILE_NR);
+    if (fd < 0 || fd >= TASK_FILE_NR)
+        return EOF;
 
     task_t *task = running_task();
     file_t *file = task->files[fd];
 
-    assert(file);
-    assert(file->inode);
-
+    if (!file || !file->inode)
+        return EOF;
+    
+    int new_offset;
     switch (whence) {
         case SEEK_SET:
-            assert(offset >= 0);
-            file->offset = offset;
+            new_offset = offset;
             break;
         case SEEK_CUR:
-            assert((file->offset + offset) >= 0);
-            file->offset += offset;
+            new_offset = file->offset + offset;
             break;
         case SEEK_END:
-            assert((file->inode->desc->size + offset) >= 0);
-            file->offset = file->inode->desc->size + offset;
+            new_offset = file->inode->desc->size + offset;
             break;
         default:
-            panic("whence value error\n");
-            break;
+            return EOF;   
         }
+
+    if (new_offset < 0)
+        return EOF;
+    file->offset = new_offset;
         
     return file->offset;
+}
+
+int sys_readdir(fd_t fd, dirent_t *dir, u32 count) {
+    if (fd < 0 || fd >= TASK_FILE_NR)
+        return EOF;
+
+    task_t *task = running_task();
+    file_t *file = task->files[fd];
+    
+    if (!file || !file->inode)
+        return EOF;
+    if (!ISDIR(file->inode->desc->mode))
+        return EOF;
+
+    u32 size = count * sizeof(dirent_t);
+    return sys_read(fd, (char *)dir, size);
 }

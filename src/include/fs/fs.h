@@ -111,6 +111,8 @@ typedef struct file_t {
     int mode;           // file mode
 } file_t;
 
+typedef dentry_t dirent_t;
+
 typedef enum whence_t {
     SEEK_SET = 1,  // 直接设置偏移
     SEEK_CUR,      // 当前位置偏移

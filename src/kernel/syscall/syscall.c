@@ -106,6 +106,10 @@ int lseek(fd_t fd, off_t offset, int whence) {
     return _syscall3(SYS_NR_LSEEK, fd, (u32)offset, whence);
 }
 
+int readdir(fd_t fd, void *dir, int count) {
+    return _syscall3(SYS_NR_READDIR, fd, (u32)dir, count);
+}
+
 char *getcwd(char *buf, size_t size) {
     return (char *)_syscall2(SYS_NR_GETCWD, (u32)buf, (u32)size);
 }
@@ -165,4 +169,8 @@ mode_t umask(mode_t mask) {
 
 void sync() {
     _syscall0(SYS_NR_SYNC);
+}
+
+void clear() {
+    _syscall0(SYS_NR_CLEAR);
 }

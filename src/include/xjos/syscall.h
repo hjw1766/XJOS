@@ -32,9 +32,11 @@ typedef enum {
     SYS_NR_UMASK = 60,
     SYS_NR_CHROOT = 61,
     SYS_NR_GETPPID = 64,
+    SYS_NR_READDIR = 89,
     SYS_NR_YIELD = 158,
     SYS_NR_SLEEP = 162,
     SYS_NR_GETCWD = 183,
+    SYS_NR_CLEAR = 200,
 }syscall_t;
 
 
@@ -62,6 +64,7 @@ void close(fd_t fd);
 int read(fd_t fd, char *buf, int len);
 int write(fd_t fd, char *buf, int len);
 int lseek(fd_t fd, off_t offset, int whence);
+int readdir(fd_t fd, void *dir, int count);
 
 char *getcwd(char *buf, size_t size);
 int chdir(char *pathname);
@@ -78,5 +81,7 @@ time_t time();
 mode_t umask(mode_t mask);
 
 void sync();
+
+void clear();
 
 #endif /* XJOS_SYSCALL_H */

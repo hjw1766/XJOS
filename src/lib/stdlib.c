@@ -28,3 +28,29 @@ u8 bin_to_bcd(u8 value) {
 u32 div_round_up(u32 num, u32 size) {
     return (num + size - 1) / size;
 }
+
+
+int atoi(const char *str) {
+    if (str == NULL)
+        return 0;
+
+    while (*str == ' ' || *str == '\t')
+        str++;
+    
+    int sign = 1;
+    if (*str == '-') {
+        sign = -1;
+        str++;
+    } else if (*str == '+') {
+        str++;
+    }
+
+    // parse number
+    int result = 0;
+    while (*str >= '0' && *str <= '9') { 
+        result = result * 10 + (*str - '0');
+        str++;
+    }
+
+    return sign * result;
+}

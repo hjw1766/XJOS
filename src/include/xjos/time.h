@@ -21,7 +21,7 @@ typedef struct {
 void time_read_bcd(tm *time);
 void time_read(tm *time);
 time_t mktime(tm *time);
-
+void localtime(time_t stamp, tm *time);
 
 
 #endif /* XJOS_TIME_H */

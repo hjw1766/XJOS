@@ -43,6 +43,8 @@ $(BUILD_DIR)/master.img: $(BUILD_DIR)/boot/boot.bin \
 	echo "hello xjos!!!, from root dir file..." > /mnt/hello.txt
 	echo "hello xjos!!!, from home dir file..." > /mnt/home/hello.txt
 
+# Fix gip bug
+	sudo chown -R 1000:0 /mnt
 # un file sys
 	sudo umount /mnt
 
@@ -67,6 +69,8 @@ $(BUILD_DIR)/slave.img: \
 	sudo chown ${USER} /mnt 
 
 	echo "slave root dir file..." > /mnt/hello.txt
+
+	sudo chown -R 1000:0 /mnt
 
 	sudo umount /mnt
 

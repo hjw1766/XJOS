@@ -604,6 +604,9 @@ int sys_mkdir(char *pathname, mode_t mode) {
     // 6. init inode
     task_t *task = running_task();
     inode = iget(dir->dev, nr);
+
+    memset(inode->desc, 0, sizeof(inode_desc_t));
+
     inode->desc->gid = task->gid;
     inode->desc->uid = task->uid;
     inode->desc->mode = (mode & 0777 & ~task->umask) | IFDIR;
@@ -872,6 +875,8 @@ inode_t *inode_open(char *pathname, int flag, int mode) {
     bdirty(buf, true);
 
     inode = iget(dir->dev, entry->nr);
+
+    memset(inode->desc, 0, sizeof(inode_desc_t));
     
     task_t *task = running_task();
 

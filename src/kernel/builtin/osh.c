@@ -3,6 +3,7 @@
 #include <xjos/stdlib.h>
 #include <libc/stdio.h>
 #include <libc/assert.h>
+#include <xjos/time.h>
 #include <fs/fs.h>
 
 
@@ -25,22 +26,61 @@ typedef struct {
     const char *desc;   // help cmd
 } cmd_t;
 
+static const cmd_t cmd_table[];
+
 // ---------- helper function ----------
 
-const char *basename(const char *path) {
+static const char *basename(const char *path) {
 
     const char *ptr = strrchr(path, '/');
     if (!ptr) return path;
     return ptr + 1;
 }
 
-void print_prompt() {
+static void print_prompt() {
     if (getcwd(cwd, MAX_PATH_LEN) < 0) {
         strcpy(cwd, "unknown");
     }
     const char *base = basename(cwd);
     if (*base == '\0') base = "/";
     printf("[root %s]# ", base);
+}
+
+static void strftime(time_t stamp, char *buf) {
+    tm time;
+    localtime(stamp, &time);
+    sprintf(buf, "%04d-%02d-%02d %02d:%02d:%02d",
+            time.tm_year + 1900,
+            time.tm_mon,
+            time.tm_mday,
+            time.tm_hour,
+            time.tm_min,
+            time.tm_sec);
+}
+
+static void parsemode(int mode, char *buf) {
+    memset(buf, '-', 10);
+    buf[10] = '\0';
+    char *ptr = buf;
+
+    switch (mode & IFMT) {
+        case IFREG: *ptr = '-'; break;
+        case IFBLK: *ptr = 'b'; break;
+        case IFDIR: *ptr = 'd'; break;
+        case IFCHR: *ptr = 'c'; break;
+        case IFIFO: *ptr = 'p'; break;
+        case IFLNK: *ptr = 'l'; break;
+        case IFSOCK: *ptr = 's'; break;
+        default: *ptr = '?'; break;
+    }
+    ptr++;
+
+    for (int i = 6; i >= 0; i -= 3) {
+        int fmt = (mode >> i) & 0x7;
+        *ptr++ = (fmt & 0b100) ? 'r' : '-';
+        *ptr++ = (fmt & 0b010) ? 'w' : '-';
+        *ptr++ = (fmt & 0b001) ? 'x' : '-';
+    }
 }
 
 // -------- builtin functions --------
@@ -56,8 +96,8 @@ void builtin_logo(int argc, char *argv[]) {
         "/_/\\_\\\\___/ \\___/|____/ "
     };
 
-    int terminal_width = 80; // VGA 文本模式标准宽度
-    int logo_width = 23;     // 上述字符画中最长一行的长度
+    int terminal_width = 80; 
+    int logo_width = 23;     
     int padding = (terminal_width - logo_width) / 2;
 
 
@@ -77,6 +117,20 @@ void builtin_test(int argc, char *argv[]) { test(); }
 void builtin_pwd(int argc, char *argv[]) { getcwd(cwd, MAX_PATH_LEN); printf("%s\n", cwd); }
 void builtin_clear(int argc, char *argv[]) { clear(); }
 
+void builtin_help(int argc, char *argv[]) {
+    printf("Available commands:\n");
+    const cmd_t *ptr = cmd_table;
+    while (ptr->name) {
+        printf("  %-8s - %s\n", ptr->name, ptr->desc);
+        ptr++;
+    }
+}
+
+void builtin_date(int argc, char *argv[]) {
+    strftime(time(), buf);
+    printf("System time: %s\n", buf);
+}
+
 void builtin_mkdir(int argc, char *argv[]) {
     if (argc < 2) {
         printf("mkdir: missing operand\n");
@@ -87,13 +141,13 @@ void builtin_mkdir(int argc, char *argv[]) {
     if (mkdir(argv[1], 0755) == EOF) {
         printf("mkdir: cannot create directory '%s': ", argv[1]);
         // exists check
-        fd_t fd = open(argv[1], O_RDONLY, 0);
-        if (fd != EOF) {
-            close(fd);
-            printf("File exists\n");
-        } else {
-            printf("No such file or directory\n");
+        stat_t statbuf;
+        if (stat(argv[1], &statbuf) == 0) {
+            printf("Directory exists\n");
+            return;
         }
+
+        printf("Permission denied or parent directory does not exist\n");
     }
 }
 
@@ -136,7 +190,7 @@ void builtin_rm(int argc, char *argv[]) {
 }
 
 void builtin_cd(int argc, char *argv[]) { 
-    if (argc < 2) return;
+    if (argc < 2) return;   // todo cd ~
 
     if (chdir(argv[1]) == EOF) {
         printf("cd: %s: No such file or directory\n", argv[1]);
@@ -144,22 +198,73 @@ void builtin_cd(int argc, char *argv[]) {
 }
 
 void builtin_ls(int argc, char *argv[]) {
-    char *target = (argc > 1) ? argv[1] : cwd;
+    bool list = false;
+    char *target = NULL;
+    
+    // parse args
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-l")) {
+            list = true;
+        } else {
+            target = argv[i];
+        }
+    }
+
+    // default target: cwd
+    if (!target) {
+        getcwd(cwd, MAX_PATH_LEN);
+        target = cwd;
+    }
+
     fd_t fd = open(target, O_RDONLY, 0);
-    if (fd == EOF) return;
+    if (fd == EOF) {
+        printf("ls: cannot access '%s': No such file or directory\n", target);
+        return;
+    }
+
 
     dentry_t entry;
     while (readdir(fd, &entry, 1) != EOF) {
         if (!entry.nr) continue; // skip empty entry
         if (!strcmp(entry.name, ".") || !strcmp(entry.name, "..")) continue;
-        printf("%s ", entry.name);
+        if (!list) {
+            printf("%s  ", entry.name);
+            continue;
+        }
+        // -l
+        stat_t statbuf;
+        stat(entry.name, &statbuf);
+        parsemode(statbuf.mode, buf);
+        printf("%s ", buf);
+
+        strftime(statbuf.ctime, buf);
+        printf("% 2d % 2d % 2d % 2d %s %s\n",
+               statbuf.nlinks,
+               statbuf.uid,
+               statbuf.gid,
+               statbuf.size,
+               buf,
+               entry.name);
     }
-    printf("\n");
+    if (!list) printf("\n");
     close(fd);
 }
 
 void builtin_cat(int argc, char *argv[]) {
-    if (argc < 2) return;
+    if (argc < 2) {
+        printf("cat: missing operand\n");
+        printf("Usage: cat <file>\n");
+        return;
+    }
+
+    stat_t statbuf;
+    if (stat(argv[1], &statbuf) == 0) {
+        if ((statbuf.mode & IFMT) == IFDIR) {
+            printf("cat: %s: Is a directory\n", argv[1]);
+            return;
+        }
+    }
+
     fd_t fd = open(argv[1], O_RDONLY, 0);
     if (fd == EOF) {
         printf("cat: %s: No such file\n", argv[1]);
@@ -193,6 +298,8 @@ static const cmd_t cmd_table[] = {
     {"ls",   builtin_ls,   "List directory contents"},
     {"cat",  builtin_cat,  "Concatenate and display file content"},
     {"exit", builtin_exit, "Exit the shell"},
+    {"date", builtin_date, "Display current system date and time"},
+    {"help", builtin_help, "Display this help message"},
     {NULL, NULL, NULL}
 };
 

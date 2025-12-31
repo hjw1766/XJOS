@@ -58,7 +58,7 @@ typedef struct inode_t {
     idx_t nr;           // inode number
     u32 count;          // reference count
     time_t atime;        // access time
-    time_t ctime;        // modify time
+    time_t ctime;        // change time
     list_node_t node;    // list node
     dev_t mount;        // install device
 } inode_t;
@@ -80,6 +80,7 @@ typedef struct super_block_t {
     struct buffer_t *imaps[IMAP_NR]; // inode map buffers
     struct buffer_t *zmaps[ZMAP_NR]; // zone map buffers
     dev_t dev;             // device number
+    u32 count;             // reference count
     list_t inode_list;     // list of inodes (useing)
     inode_t *iroot;         // root inode
     inode_t *imount;        // mount inode
@@ -133,6 +134,7 @@ idx_t bmap(inode_t *inode, idx_t block, bool create);
 inode_t *get_root_inode();
 inode_t *iget(dev_t dev, idx_t nr);
 void iput(inode_t *inode);
+inode_t *new_inode(dev_t dev, idx_t nr);
 
 void dcache_init();
 idx_t dcache_lookup(struct inode_t *dir, const char *name, size_t len);

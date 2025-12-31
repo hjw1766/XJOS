@@ -67,6 +67,11 @@ extern void console_clear();
 extern int sys_stat();
 extern int sys_fstat();
 
+extern int sys_mknod();
+
+extern int sys_mount();
+extern int sys_umount();
+
 void syscall_init() {
     for (size_t i = 0; i < SYSTEM_SIZE; i++) {
         syscall_table[i] = sys_default;
@@ -113,4 +118,9 @@ void syscall_init() {
 
     syscall_table[SYS_NR_STAT] = sys_stat;
     syscall_table[SYS_NR_FSTAT] = sys_fstat;
+
+    syscall_table[SYS_NR_MKNOD] = sys_mknod;
+
+    syscall_table[SYS_NR_MOUNT] = sys_mount;
+    syscall_table[SYS_NR_UMOUNT] = sys_umount;
 }

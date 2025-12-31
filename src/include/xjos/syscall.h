@@ -24,9 +24,12 @@ typedef enum {
     SYS_NR_UNLINK = 10,
     SYS_NR_CHDIR = 12,
     SYS_NR_TIME = 13,
+    SYS_NR_MKNOD = 14,
     SYS_NR_STAT = 18,
     SYS_NR_LSEEK = 19,
     SYS_NR_GETPID = 20,
+    SYS_NR_MOUNT = 21,
+    SYS_NR_UMOUNT = 22,
     SYS_NR_FSTAT = 28,
     SYS_NR_SYNC = 36,
     SYS_NR_MKDIR = 39,
@@ -78,6 +81,11 @@ int rmdir(char *pathname);
 
 int link(char *oldname, char *newname);
 int unlink(char *filename);
+
+int mount(char *devname, char *dirname, int flags);
+int umount(char *target);
+
+int mknod(char *filename, int mode, int dev);
 
 time_t time();
 

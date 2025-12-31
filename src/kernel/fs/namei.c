@@ -247,6 +247,23 @@ static buffer_t *find_entry(inode_t **dir, const char *name, char **next, dentry
     if (!ISDIR((*dir)->desc->mode)) 
         return NULL;
 
+    /**
+     * 1. 是否 ".." 目录
+     * 2. 是否为根目录 (nr == 1)
+     */
+    if (match_name(name, "..", 2, next) && (*dir)->nr == 1) {
+        super_block_t *sb = get_super((*dir)->dev);
+
+        // 超级块有挂载点
+        if (sb->imount) {
+            inode_t *inode = *dir;
+
+            (*dir) = sb->imount;
+            (*dir)->count++;
+            iput(inode); // release old dir inode
+        }
+    }
+
     u32 entries = (*dir)->desc->size / sizeof(dentry_t);
     idx_t block_idx = 0;
     buffer_t *buf = NULL;
@@ -356,9 +373,9 @@ buffer_t *add_entry(inode_t *dir, const char *name, dentry_t **result) {
 
 
 // 高级查找：供外部通过路径获取 inode
-idx_t dir_lookup(inode_t *dir, const char *name, size_t len) {
+idx_t dir_lookup(inode_t **dir, const char *name, size_t len) {
     // 1. 查缓存
-    idx_t nr = dcache_lookup(dir, name, len);
+    idx_t nr = dcache_lookup(*dir, name, len);
     if (nr != 0) return nr;
 
     // 2. 查磁盘
@@ -366,7 +383,7 @@ idx_t dir_lookup(inode_t *dir, const char *name, size_t len) {
     char *next = NULL;
     
     // 调用提取出来的 find_entry
-    buffer_t *buf = find_entry(&dir, name, &next, &entry);
+    buffer_t *buf = find_entry(dir, name, &next, &entry);
     if (buf) {
         nr = entry->nr;
         
@@ -374,7 +391,7 @@ idx_t dir_lookup(inode_t *dir, const char *name, size_t len) {
         // 这里的校验是为了双重保险，因为 find_entry 的 next 逻辑
         int entry_len = minix_name_len(entry->name);
         if (entry_len == len) {
-            dcache_add(dir, name, len, nr);
+            dcache_add(*dir, name, len, nr);
         }
 
         brelse(buf);
@@ -426,7 +443,7 @@ inode_t *named(char *pathname, char **next) {
 
         // [NEW] 使用 dir_lookup 替代 find_entry
         // dir_lookup 内部封装了 dcache 查找 -> 失败查盘 -> 自动填充 dcache
-        idx_t nr = dir_lookup(inode, left, len);
+        idx_t nr = dir_lookup(&inode, left, len);
         
         if (nr == 0) // not found
             goto failure;
@@ -537,7 +554,7 @@ inode_t *namei(char *pathname) {
 
     // [NEW] 使用 dir_lookup 查找最终目标
     // 这样最后的文件名查找也会走缓存！
-    idx_t nr = dir_lookup(dir, name, len);
+    idx_t nr = dir_lookup(&dir, name, len);
     
     if (nr == 0) {     // not found
         iput(dir);
@@ -586,7 +603,7 @@ int sys_mkdir(char *pathname, mode_t mode) {
     char *name = next;
         
     // 3. check if file exists
-    if (dir_lookup(dir, name, path_len(name)) != 0) {
+    if (dir_lookup(&dir, name, path_len(name)) != 0) {
         LOGK("mkdir: cannot create directory \"%s\": File exists\n", name);
         goto rollback;
     }
@@ -599,19 +616,21 @@ int sys_mkdir(char *pathname, mode_t mode) {
     
     // 5. new inode
     idx_t nr = ialloc(dir->dev);
+    if (nr == 0)
+        goto rollback;
     entry->nr = nr;
     bdirty(ebuf, true);
     // 6. init inode
     task_t *task = running_task();
-    inode = iget(dir->dev, nr);
+    inode = new_inode(dir->dev, entry->nr);
+    if (!inode) {
+        ifree(dir->dev, nr);
+        goto rollback;
+    }
 
-    memset(inode->desc, 0, sizeof(inode_desc_t));
 
-    inode->desc->gid = task->gid;
-    inode->desc->uid = task->uid;
     inode->desc->mode = (mode & 0777 & ~task->umask) | IFDIR;
-    inode->desc->mtime = time();
-    inode->desc->nlinks = 2; // . and name
+    inode->desc->nlinks = 2; // . and ..
     inode->desc->size = 2 * sizeof(dentry_t); // . and ..
     bdirty(inode->buf, true);
 
@@ -635,7 +654,6 @@ int sys_mkdir(char *pathname, mode_t mode) {
 
     // 8. update parent dir link count
     dir->desc->nlinks++;
-    dir->desc->mtime = time();
     bdirty(dir->buf, true);
     
     // 9. update Dcache
@@ -749,13 +767,12 @@ int sys_link(char *oldname, char *newname) {
         goto rollback;
 
     char *name = next;
-
-    dentry_t *entry;
-
-    buf = find_entry(&dir, name, &next, &entry);
-    if (buf)        // newname exists
+    
+    // [opt.] dir_lookup
+    if (dir_lookup(&dir, name, path_len(name)) != 0)
         goto rollback;
 
+    dentry_t *entry;
     // add new entry
     buf = add_entry(dir, name, &entry);
     entry->nr = inode->nr;      // point to the same inode
@@ -853,9 +870,13 @@ inode_t *inode_open(char *pathname, int flag, int mode) {
         goto rollback; // cannot truncate read-only file
     
     char *name = next;
-    buf = find_entry(&dir, name, &next, &entry);
-    if (buf) {      // file exists
-        inode = iget(dir->dev, entry->nr);
+    // [opt.] use dir_lookup
+    idx_t nr = dir_lookup(&dir, name, path_len(name));
+    if (nr != 0) {
+        // file exists
+        inode = iget(dir->dev, nr);
+        if (!inode)
+            goto rollback;
         goto makeup;
     }
 
@@ -872,23 +893,22 @@ inode_t *inode_open(char *pathname, int flag, int mode) {
 
     // 从inode位图中分配新inode，然后再拿到物理块号
     entry->nr = ialloc(dir->dev);   // * ialloc may fail?
+    if (entry->nr == 0)
+        goto rollback;
+
     bdirty(buf, true);
 
-    inode = iget(dir->dev, entry->nr);
+    inode = new_inode(dir->dev, entry->nr);
+    if (!inode) {
+        ifree(dir->dev, entry->nr);
+        goto rollback;
+    }
 
-    memset(inode->desc, 0, sizeof(inode_desc_t));
     
     task_t *task = running_task();
-
     mode &= (0777 & ~task->umask);
     mode |= IFREG; // regular file
-    
-    inode->desc->uid = task->uid;
-    inode->desc->gid = task->gid;
     inode->desc->mode = mode;
-    inode->desc->mtime = time();
-    inode->desc->size = 0;
-    inode->desc->nlinks = 1;
     bdirty(inode->buf, true);
 
     dcache_add(dir, name, path_len(name), inode->nr);
@@ -1056,4 +1076,59 @@ int sys_chroot(char *pathname) {
 rollback:
     iput(inode);
     return EOF;    
+}
+
+int sys_mknod(char *filename, int mode, int dev) {
+    char *next = NULL;
+    inode_t *dir = NULL;
+    buffer_t *buf = NULL;
+    inode_t *inode = NULL;
+    int ret = EOF;
+
+    dir = named(filename, &next); // parent dir
+    if (!dir)
+        goto rollback;
+    if (!*next)
+        goto rollback;
+    if (!permission(dir, P_WRITE))
+        goto rollback;
+    
+    char *name = next;
+    if (dir_lookup(&dir, name, path_len(name)) != 0)
+        goto rollback; // file exists
+    
+    // add new entry
+    dentry_t *entry = NULL;
+    buf = add_entry(dir, name, &entry);
+    if (!buf)
+        goto rollback;
+    
+    // allocate new inode
+    entry->nr = ialloc(dir->dev);
+    if (entry->nr == 0)
+        goto rollback;
+        
+    bdirty(buf, true);
+
+    inode = new_inode(dir->dev, entry->nr);
+    if (!inode) {
+        ifree(dir->dev, entry->nr);
+        goto rollback;
+    }
+
+    inode->desc->mode = mode;
+    if (ISCHR(mode) || ISBLK(mode))
+        inode->desc->zones[0] = dev; // store device number
+
+    bdirty(inode->buf, true);
+
+    dcache_add(dir, name, path_len(name), entry->nr);
+
+    ret = 0;
+
+rollback:
+    brelse(buf);
+    iput(dir);
+    iput(inode);
+    return ret;
 }

@@ -35,13 +35,11 @@ $(BUILD_DIR)/master.img: $(BUILD_DIR)/boot/boot.bin \
 	sudo chown ${USER} /mnt
 
 # mkdir
-	mkdir -p /mnt/empty
-	mkdir -p /mnt/home
-	mkdir -p /mnt/d1/d2/d3/d4
+	mkdir -p /mnt/dev
+	mkdir -p /mnt/mnt
 
 # file
 	echo "hello xjos!!!, from root dir file..." > /mnt/hello.txt
-	echo "hello xjos!!!, from home dir file..." > /mnt/home/hello.txt
 
 # Fix gip bug
 	sudo chown -R 1000:0 /mnt

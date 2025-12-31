@@ -6,6 +6,7 @@
 #include <fs/buffer.h>
 #include <libc/string.h>
 #include <xjos/stdlib.h>
+#include <xjos/task.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
@@ -70,6 +71,24 @@ static inode_t *find_inode(dev_t dev, idx_t nr) {
 }
 
 
+static inode_t *fit_inode(inode_t *inode) {
+    if (!inode || !inode->mount)
+        return inode;
+    
+    super_block_t *sb = get_super(inode->mount);
+    assert(sb);
+
+    // must be mount root inode
+    assert(sb->iroot);
+
+    inode_t *root = sb->iroot;
+    root->count++;  // increase reference count
+    iput(inode);    // release original inode
+
+    return root;
+}
+
+
 // get dev - nr inode
 inode_t *iget(dev_t dev, idx_t nr) {
     // find cached inode
@@ -78,7 +97,7 @@ inode_t *iget(dev_t dev, idx_t nr) {
         inode->count++;
         inode->atime = time();
 
-        return inode;
+        return fit_inode(inode);
     }
 
     // miss
@@ -109,6 +128,29 @@ inode_t *iget(dev_t dev, idx_t nr) {
     return inode;
 }
 
+inode_t *new_inode(dev_t dev, idx_t nr) {
+    task_t *task = running_task();
+    inode_t *inode = iget(dev, nr);
+    if (!inode) {
+        LOGK("new_inode: iget failed for dev %d nr %d in task %d\n", dev, nr, task->pid);
+        return NULL;
+    }
+
+    bdirty(inode->buf, true); // mark dirty
+
+    inode->desc->mode = 0777 & (~task->umask);
+    inode->desc->uid = task->uid;
+    inode->desc->gid = task->gid;
+    inode->desc->size = 0;
+    inode->desc->mtime = time();
+    inode->desc->nlinks = 1;
+    // clear zones
+    memset(inode->desc->zones, 0, sizeof(inode->desc->zones));
+
+    inode->atime = inode->ctime = inode->desc->mtime;
+
+    return inode;
+}
 
 // free inode
 void iput(inode_t *inode) {

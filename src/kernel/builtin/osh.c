@@ -131,6 +131,24 @@ void builtin_date(int argc, char *argv[]) {
     printf("System time: %s\n", buf);
 }
 
+void builtin_mount(int argc, char *argv[]) {
+    if (argc < 3) {
+        printf("mount: missing operand\n");
+        printf("Usage: mount <source> <target>\n");
+        return;
+    }
+    mount(argv[1], argv[2], 0);
+}
+
+void builtin_umount(int argc, char *argv[]) {
+    if (argc < 2) {
+        printf("umount: missing operand\n");
+        printf("Usage: umount <target>\n");
+        return;
+    }
+    umount(argv[1]);
+}
+
 void builtin_mkdir(int argc, char *argv[]) {
     if (argc < 2) {
         printf("mkdir: missing operand\n");
@@ -300,6 +318,8 @@ static const cmd_t cmd_table[] = {
     {"exit", builtin_exit, "Exit the shell"},
     {"date", builtin_date, "Display current system date and time"},
     {"help", builtin_help, "Display this help message"},
+    {"mount",builtin_mount,"Mount a filesystem"},
+    {"umount",builtin_umount,"Unmount a filesystem"},
     {NULL, NULL, NULL}
 };
 

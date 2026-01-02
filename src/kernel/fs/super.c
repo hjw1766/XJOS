@@ -2,6 +2,8 @@
 #include <fs/buffer.h>
 #include <drivers/device.h>
 #include <fs/stat.h>
+#include <xjos/syscall.h>
+#include <xjos/task.h>
 #include <libc/assert.h>
 #include <libc/string.h>
 #include <xjos/debug.h>
@@ -217,6 +219,156 @@ int sys_umount(char *target) {
 
 rollback:
     put_super(sb);
+    iput(inode);
+    return ret;
+}
+
+static int devmkfs(dev_t dev, u32 icount) {
+    super_block_t *sb = NULL;
+    buffer_t *buf = NULL;
+    int ret = EOF;
+
+    int total_block = device_ioctl(dev, DEV_CMD_SECTOR_SIZE, NULL, 0) / BLOCK_SECS;
+    assert(total_block);    // device size > 0
+    assert(icount < total_block);
+
+    if (!icount) {
+        icount = total_block / 3;   // default 1/3 blocks for inodes
+    }
+
+    sb = get_free_super();
+    sb->dev = dev;
+    sb->count = 1;
+
+    buf = bread(dev, 1); // super block is in block 1
+    sb->buf = buf;
+    bdirty(buf, true);
+
+    // init super block
+    super_desc_t *desc = (super_desc_t *)buf->data;
+    sb->desc = desc;
+
+    int inode_blocks = div_round_up(icount * sizeof(inode_desc_t), BLOCK_SIZE);
+    desc->inodes = icount;
+    desc->zones = total_block;
+    // icount need use imap
+    desc->imap_blocks = div_round_up(icount, BLOCK_BITS);
+
+    // data zones need use zmap
+    int zcount = total_block - desc->imap_blocks - inode_blocks - 2;
+    desc->zmap_blocks = div_round_up(zcount, BLOCK_BITS);
+
+    desc->firstdatazone = 2 + desc->imap_blocks + desc->zmap_blocks + inode_blocks;
+    desc->long_zone_size = 0;
+    desc->max_size = BLOCK_SIZE * TOTAL_BLOCK;
+    desc->magic = MINIX1_MAGIC;
+
+    // clear map
+    memset(sb->imaps, 0, sizeof(sb->imaps));
+    memset(sb->zmaps, 0, sizeof(sb->zmaps));
+
+    int idx = 2;    // 0 boot, 1 super
+    for (int i = 0; i < sb->desc->imap_blocks; i++) {
+        if ((sb->imaps[i] = bread(dev, idx))) {
+            memset(sb->imaps[i]->data, 0, BLOCK_SIZE);
+            bdirty(sb->imaps[i], true);
+            idx++;
+        } else
+            break;
+    }
+
+    for (int i = 0; i < sb->desc->zmap_blocks; i++) {
+        if ((sb->zmaps[i] = bread(dev, idx))) {
+            memset(sb->zmaps[i]->data, 0, BLOCK_SIZE);
+            bdirty(sb->zmaps[i], true);
+            idx++;
+        } else
+            break;
+    }
+
+    // init bitmap
+    idx = balloc(dev);  // alloc block 0 (not use)
+    idx = ialloc(dev);  // alloc inode 0 (not use)
+    idx = ialloc(dev);  // alloc inode 1 (root inode)
+
+    int counts[] = {
+        icount + 1,     // idx 0 not use
+        zcount,
+    };
+
+    buffer_t *maps[] = {
+        sb->imaps[sb->desc->imap_blocks - 1],   // last imap block
+        sb->zmaps[sb->desc->zmap_blocks - 1],   // last zmap block
+    };
+
+    for (size_t i = 0; i < 2; i++) {
+        int count = counts[i];
+        buffer_t *map = maps[i];
+        bdirty(map, true);
+
+        int offset = count % BLOCK_BITS;
+        int begin = offset / 8;
+        // 指向最后一个字节(部分使用的混合字节)
+        char *ptr = (char *)map->data + begin;
+        // 避开前面的完整字节，直接先 + 1
+        memset(ptr + 1, 0xFF, BLOCK_SIZE - begin - 1);
+        
+        // 处理混合字节
+        int bits = 0x80;
+        char data = 0;
+        int remian = 8 - offset % 8;
+        while (remian--) {
+            data |= bits;
+            bits >>= 1;
+        }
+        ptr[0] = data;
+    }
+
+    task_t *task = running_task();
+
+    inode_t *iroot = new_inode(dev, 1);
+    sb->iroot = iroot;
+
+    iroot->desc->mode = (0777 & ~task->umask) | IFDIR;
+    iroot->desc->size = sizeof(dirent_t) * 2;
+    iroot->desc->nlinks = 2;
+
+    buf = bread(dev, bmap(iroot, 0, true));
+    bdirty(buf, true);
+
+    dentry_t *entry = (dirent_t *)buf->data;
+    memset(entry, 0, BLOCK_SIZE);
+
+    strcpy(entry->name, ".");
+    entry->nr = iroot->nr;
+    entry++;
+
+    strcpy(entry->name, "..");
+    entry->nr = iroot->nr;
+
+    brelse(buf);
+    ret = 0;
+rollback:
+    put_super(sb);
+    return ret;
+}
+
+int sys_mkfs(char *devname, int icount) {
+    inode_t *inode = NULL;
+    int ret = EOF;
+
+    inode = namei(devname);
+    if (!inode)
+        goto rollback;
+    if (!ISBLK(inode->desc->mode))
+        goto rollback;
+    
+    dev_t dev = inode->desc->zones[0];
+    assert(dev);
+
+    ret = devmkfs(dev, icount);
+
+rollback:
     iput(inode);
     return ret;
 }

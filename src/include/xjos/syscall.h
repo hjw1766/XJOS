@@ -43,6 +43,7 @@ typedef enum {
     SYS_NR_SLEEP = 162,
     SYS_NR_GETCWD = 183,
     SYS_NR_CLEAR = 200,
+    SYS_NR_MKFS = 201,
 }syscall_t;
 
 
@@ -97,5 +98,7 @@ void clear();
 
 int stat(char *filename, stat_t *statbuf);
 int fstat(fd_t fd, stat_t *statbuf);
+
+int mkfs(char *devname, int icount);
 
 #endif /* XJOS_SYSCALL_H */

@@ -149,6 +149,15 @@ void builtin_umount(int argc, char *argv[]) {
     umount(argv[1]);
 }
 
+void builtin_mkfs(int argc, char *argv[]) {
+    if (argc < 2) {
+        printf("mkfs: missing operand\n");
+        printf("Usage: mkfs <device>\n");
+        return;
+    }
+    mkfs(argv[1], 0);
+}
+
 void builtin_mkdir(int argc, char *argv[]) {
     if (argc < 2) {
         printf("mkdir: missing operand\n");
@@ -320,6 +329,7 @@ static const cmd_t cmd_table[] = {
     {"help", builtin_help, "Display this help message"},
     {"mount",builtin_mount,"Mount a filesystem"},
     {"umount",builtin_umount,"Unmount a filesystem"},
+    {"mkfs", builtin_mkfs, "Create a filesystem"},
     {NULL, NULL, NULL}
 };
 

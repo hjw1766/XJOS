@@ -21,13 +21,28 @@
 // kernel ramdisk size
 #define KERNEL_RAMDISK_SIZE 0x400000 // 4MB
 
+// user program exec addr
+#define USER_EXEC_ADDR KERNEL_MEMORY_SIZE
+
+// user mmap start addr
+#define USER_MMAP_ADDR 0x8000000     // 128MB
+
+#define USER_STACK_SIZE 0x400000   // 4MB
+
 // user stack top
-#define USER_STACK_TOP 0x8000000    // 128MB
+#define USER_STACK_TOP 0x10000000    // 256MB
 
-#define USER_STACK_SIZE 0x200000   // 2MB
+// user stack guard size
+#define USER_GUARD_SIZE   0x100000   // 1MB
 
-// 128MB - 2MB = 126MB
+// 256MB - 4MB = 252MB
 #define USER_STACK_BOTTOM (USER_STACK_TOP - USER_STACK_SIZE)
+
+// user mmap limit addr
+#define USER_MMAP_LIMIT   (USER_STACK_TOP - USER_STACK_SIZE - USER_GUARD_SIZE)
+
+// user mmap size
+#define USER_MMAP_SIZE (USER_MMAP_LIMIT - USER_MMAP_ADDR)   // 123MB
  
 #define KERNEL_PAGE_DIR 0x1000
 
@@ -41,7 +56,9 @@ typedef struct {
     u8 dirty : 1;               // dirty page, has been written to
     u8 pat : 1;                 // page attribute table, 4K/4M
     u8 global : 1;              // global page, can be swapped
-    u8 available : 3;           // reserved for OS use
+    u8 shared : 1;              // shared page
+    u8 privat : 1;             // private page
+    u8 flag : 1;               // sys Maintain
     u32 index : 20;           // page index
 }_packed page_entry_t;
 
@@ -53,6 +70,12 @@ void set_cr3(u32 pde);
 u32 alloc_kpage(u32 count);
 void free_kpage(u32 vaddr, u32 count);
 
+// get page table entry
+page_entry_t *get_entry(u32 vaddr, bool create);
+
+// flush tlb
+void flush_tlb(u32 vaddr);
+
 // vaddr <-> paddr
 void link_page(u32 vaddr);
 void unlink_page(u32 vaddr);
@@ -61,8 +84,5 @@ void unlink_page(u32 vaddr);
 page_entry_t *copy_pde();
 
 void free_pde();
-
-// sys brk
-int32 sys_brk(void *addr);
 
 #endif /* XJOS_MEMORY_H */

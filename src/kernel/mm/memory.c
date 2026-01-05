@@ -6,6 +6,8 @@
 #include <libc/string.h>
 #include <xjos/bitmap.h>
 #include <xjos/task.h>
+#include <xjos/syscall.h>
+#include <fs/fs.h>
 
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
@@ -257,7 +259,13 @@ static page_entry_t *get_pte(u32 vaddr, bool create) {
 }
 
 
-static void flush_tlb(u32 vaddr) {
+page_entry_t *get_entry(u32 vaddr, bool create) {
+    page_entry_t *pte = get_pte(vaddr, create);
+    return &pte[TIDX(vaddr)];
+}
+
+
+void flush_tlb(u32 vaddr) {
     asm volatile("invlpg (%0)" :: "r"(vaddr) : "memory");
 }
 
@@ -364,22 +372,14 @@ void link_page(u32 vaddr) {
     ASSERT_PAGE(vaddr);
 
     // pte -> page table
-    page_entry_t *pte = get_pte(vaddr, true);
-    page_entry_t *entry = &pte[TIDX(vaddr)];
+    page_entry_t *entry = get_entry(vaddr, true);
 
-    task_t *task = running_task();
-    bitmap_t *map = task->vmap;
     u32 index = IDX(vaddr);
-
 
     // page present
     if (entry->present) {
-        assert(bitmap_test(map, index));
         return;
     }
-
-    assert(!bitmap_test(map, index));
-    bitmap_set(map, index, true);
 
     u32 paddr = get_page();     // data page
     entry_init(entry, IDX(paddr));
@@ -392,22 +392,19 @@ void link_page(u32 vaddr) {
 void unlink_page(u32 vaddr) {
     ASSERT_PAGE(vaddr);
 
-    page_entry_t *pte = get_pte(vaddr, true);
-    page_entry_t *entry = &pte[TIDX(vaddr)];
-
-    task_t *task = running_task();
-    bitmap_t *map = task->vmap;
+    page_entry_t *pde = get_pde();
+    page_entry_t *entry = &pde[DIDX(vaddr)];
+    if (!entry->present)    // check page table present
+        return;
+    
+    entry = get_entry(vaddr, false);
     u32 index = IDX(vaddr);
 
     if (!entry->present) {
-        assert(!bitmap_test(map, index));
         return;
     }
 
-    assert(entry->present && bitmap_test(map, index));
-
     entry->present = false;
-    bitmap_set(map, index, false);
 
     // dont free page table, local theory
     u32 paddr = PAGE(entry->index);
@@ -423,20 +420,21 @@ void unlink_page(u32 vaddr) {
 // copy page, retrun paddr
 static u32 copy_page(void *page) {
     u32 paddr = get_page();
+    u32 vaddr = 0;
 
     // build pde[0] -> pte[0] -> page
-    page_entry_t *entry = get_pte(0, false);
+    page_entry_t *entry = get_pte(vaddr, false);
     entry_init(entry, IDX(paddr));
 
     // !bug
-    flush_tlb(0);   // update tlb, beacuse old_tlb is 0
+    flush_tlb(vaddr);   // update tlb, beacuse old_tlb is 0
 
     // page write -> 0(paddr)
-    memcpy((void *)0, (void *)page, PAGE_SIZE);
+    memcpy((void *)vaddr, (void *)page, PAGE_SIZE);
 
     entry->present = false;
 
-    flush_tlb(0);   // Strengthen Assertion
+    flush_tlb(vaddr);   // Strengthen Assertion
     return paddr;
 }
 
@@ -501,7 +499,10 @@ page_entry_t *copy_pde() {
             
             // present
             assert(memory_map[entry->index] > 0);
-            entry->write = false;
+            // if dont shared page, read only
+            if (!entry->shared) {
+                entry->write = false;
+            }
             memory_map[entry->index]++;
 
             assert(memory_map[entry->index] < 255);
@@ -517,7 +518,7 @@ page_entry_t *copy_pde() {
 }
 
 
-int32 sys_brk(void *addr) {
+int sys_brk(void *addr) {
     // LOGK("task brk 0x%p\n", addr);
     u32 brk = (u32)addr;
 
@@ -526,7 +527,7 @@ int32 sys_brk(void *addr) {
     task_t *task = running_task();
     assert(task->uid != KERNEL_USER);
 
-    assert((KERNEL_MEMORY_SIZE <= brk) && (brk < USER_STACK_BOTTOM));
+    assert((KERNEL_MEMORY_SIZE <= brk) && (brk < USER_MMAP_ADDR));
     u32 old_brk = task->brk;
 
     // if brk < old_brk, need free page
@@ -543,6 +544,71 @@ int32 sys_brk(void *addr) {
     return 0;
 }
 
+void *sys_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
+    ASSERT_PAGE((u32)addr);
+
+    u32 count = div_round_up(length, PAGE_SIZE);
+    u32 vaddr = (u32)addr;
+
+    task_t *task = running_task();
+    // if addr is NULL, scan free pages
+    if (!vaddr) {
+        vaddr = scan_page(task->vmap, count);
+    }
+
+    // scan mmap addr (auto)
+    u32 vend = vaddr + count * PAGE_SIZE;
+    assert(vaddr >= USER_MMAP_ADDR && 
+        vend <= USER_MMAP_LIMIT && vaddr < vend);
+
+    for (size_t i = 0; i < count; i++) {
+        u32 page = vaddr + i * PAGE_SIZE;
+        link_page(page);
+        memset((void *)page, 0, PAGE_SIZE);
+        bitmap_set(task->vmap, IDX(page), true);
+
+        page_entry_t *entry = get_entry(page, false);
+        entry->user = true;
+        entry->write = false;
+        if (prot & PROT_WRITE) {
+            entry->write = true;
+        }
+        if (flags & MAP_SHARED) {
+            entry->shared = true;
+        }
+        if (flags & MAP_PRIVATE) {
+            entry->privat = true;
+        }
+        flush_tlb(page);
+    }
+
+    if (fd != EOF) {
+        lseek(fd, offset, SEEK_SET);
+        read(fd, (void *)vaddr, length);    // todo
+    }
+
+    return (void *)vaddr;
+}
+
+int sys_munmap(void *addr, size_t length) {
+    u32 vaddr = (u32)addr;
+    
+    ASSERT_PAGE(vaddr);
+    u32 count = div_round_up(length, PAGE_SIZE);
+    u32 vend = vaddr + count * PAGE_SIZE;
+    assert(vaddr >= USER_MMAP_ADDR && 
+        vaddr <= USER_MMAP_LIMIT && vaddr < vend);
+
+    task_t *task = running_task();
+    for (size_t i = 0; i < count; i++) {
+        u32 page = vaddr + i * PAGE_SIZE;
+        unlink_page(page);
+        assert(bitmap_test(task->vmap, IDX(page)));
+        bitmap_set(task->vmap, IDX(page), false);
+    }
+
+    return 0;
+}
 
 typedef struct {
     u8 present : 1;
@@ -578,10 +644,10 @@ void page_fault(u32 vector,
     if (code->present) {
         assert(code->present);  // parent and child process only read
         
-        page_entry_t *pte = get_pte(vaddr, false);
-        page_entry_t *entry = &pte[TIDX(vaddr)];
+        page_entry_t *entry = get_entry(vaddr, false);
 
         assert(entry->present);
+        assert(!entry->shared);  // not shared page
         assert(memory_map[entry->index] > 0);
         if (memory_map[entry->index] == 1) {
             // parent process exit
@@ -602,7 +668,7 @@ void page_fault(u32 vector,
 
 
     //* Demand Paging
-    // stack 126 - 128M, heap < task->brk 
+    // stack 254 - 256M, heap < task->brk 
     if (!code->present && (vaddr < task->brk || vaddr >= USER_STACK_BOTTOM)) {
         u32 page = PAGE(IDX(vaddr));
         link_page(page);

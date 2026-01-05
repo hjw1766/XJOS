@@ -448,7 +448,7 @@ void task_to_user_mode(target_t target) {
     // 为用户进程分配独立的内存位图
     task->vmap = kmalloc(sizeof(bitmap_t));
     void *buf = (void *)alloc_kpage(1);
-    bitmap_init(task->vmap, buf, PAGE_SIZE, KERNEL_MEMORY_SIZE / PAGE_SIZE);
+    bitmap_init(task->vmap, buf, USER_MMAP_SIZE / PAGE_SIZE / 8, USER_MMAP_ADDR / PAGE_SIZE);
 
     // 复制页表并切换
     task->pde = (u32)copy_pde();

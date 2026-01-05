@@ -39,12 +39,25 @@ typedef enum {
     SYS_NR_CHROOT = 61,
     SYS_NR_GETPPID = 64,
     SYS_NR_READDIR = 89,
+    SYS_NR_MMAP = 90,
+    SYS_NR_MUNMAP = 91,
     SYS_NR_YIELD = 158,
     SYS_NR_SLEEP = 162,
     SYS_NR_GETCWD = 183,
     SYS_NR_CLEAR = 200,
     SYS_NR_MKFS = 201,
 }syscall_t;
+
+enum mmap_type_t {
+    PROT_NONE = 0,
+    PROT_READ = 1,
+    PROT_WRITE = 2,
+    PROT_EXEC = 4,
+
+    MAP_SHARED = 1,
+    MAP_PRIVATE = 2,
+    MAP_FIXED = 0x10,
+};
 
 
 u32 test();
@@ -60,7 +73,9 @@ pid_t fork();
 
 void exit(int status);
 
-int32 brk(void *addr);
+int brk(void *addr);
+void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+int munmap(void *addr, size_t length);
 
 fd_t open(char *filename, int flags, int mode);
 

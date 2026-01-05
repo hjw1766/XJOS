@@ -195,6 +195,9 @@ syscall_handler:
     push 0x80
     ; xchg bx, bx
 
+    push ebp    ; arg6
+    push edi    ; arg5
+    push esi    ; arg4
     push edx    ; arg3
     push ecx    ; arg2
     push ebx    ; arg1
@@ -202,7 +205,7 @@ syscall_handler:
     call [syscall_table + eax * 4]
 
     ; xchg bx, bx
-    add esp, 12     ; system invoke return
+    add esp, (6 * 4)     ; system invoke return
 
     mov dword [esp + 8 * 4], eax
     

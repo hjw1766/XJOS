@@ -1030,7 +1030,7 @@ int sys_chdir(char *pathname) {
     inode_t *inode = namei(pathname);
     if (!inode)
         goto rollback;
-    if (!ISDIR(inode->desc->mode) || inode == task->ipwd)
+    if (!ISDIR(inode->desc->mode))
         goto rollback;
     if (!permission(inode, P_EXEC))
         goto rollback;

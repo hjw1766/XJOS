@@ -2,7 +2,8 @@ $(BUILD_DIR)/master.img: $(BUILD_DIR)/boot/boot.bin \
 	$(BUILD_DIR)/boot/loader.bin \
 	$(BUILD_DIR)/system.bin \
 	$(BUILD_DIR)/system.map \
-	$(SRC_DIR)/utils/master.sfdisk
+	$(SRC_DIR)/utils/master.sfdisk \
+	$(BUILD_DIR)/kernel/builtin/hello.out
 
 # create 16M disk image
 	yes | bximage -q -hd=16 -func=create -sectsize=512 -imgmode=flat $@
@@ -40,6 +41,8 @@ $(BUILD_DIR)/master.img: $(BUILD_DIR)/boot/boot.bin \
 
 # file
 	echo "hello xjos!!!, from root dir file..." > /mnt/hello.txt
+
+	cp $(BUILD_DIR)/kernel/builtin/hello.out /mnt/hello.out
 
 # Fix gip bug
 	sudo chown -R 1000:0 /mnt

@@ -424,6 +424,8 @@ static int cmd_parse(char *cmd, char *argv[], char token) {
 }
 
 int osh_main() {
+    execve("/hello.out", NULL, NULL); // test execve
+
     memset(cmd, 0, sizeof(cmd));
     
     getcwd(cwd, MAX_PATH_LEN);

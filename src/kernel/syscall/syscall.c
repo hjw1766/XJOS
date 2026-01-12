@@ -156,6 +156,10 @@ int readdir(fd_t fd, void *dir, int count) {
     return _syscall3(SYS_NR_READDIR, fd, (u32)dir, count);
 }
 
+int execve(char *filename, char *argv[], char *envp[]) {
+    return _syscall3(SYS_NR_EXECVE, (u32)filename, (u32)argv, (u32)envp);
+}
+
 char *getcwd(char *buf, size_t size) {
     return (char *)_syscall2(SYS_NR_GETCWD, (u32)buf, (u32)size);
 }

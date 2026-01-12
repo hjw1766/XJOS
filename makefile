@@ -41,7 +41,12 @@ LDFLAGS := -m elf_i386 -static
 # 1. Find all C source files and kernel assembly files
 #    We assume all kernel-related assembly files are in src/kernel
 C_SOURCES   := $(shell find $(SRC_DIR) -name '*.c' -not -path '$(SRC_DIR)/test/*')
-ASM_SOURCES := $(shell find $(SRC_DIR)/kernel -name '*.asm' -not -path '$(SRC_DIR)/test/*')
+
+ALL_ASM     := $(shell find $(SRC_DIR)/kernel -name '*.asm')
+ASM_SOURCES := $(filter-out $(SRC_DIR)/kernel/builtin/% $(SRC_DIR)/kernel/test/%, $(ALL_ASM))
+
+TEMP_ASM_OBJ := $(BUILD_DIR)/kernel/builtin/hello.o
+TEMP_ASM_OUT := $(BUILD_DIR)/kernel/builtin/hello.out
 
 # 2. Generate corresponding .o target file list in build directory
 C_OBJS   := $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(C_SOURCES))
@@ -55,8 +60,15 @@ OTHER_OBJS := $(filter-out $(ENTRY_OBJ), $(C_OBJS) $(ASM_OBJS))
 # ====================================================================
 #                            Build Rules
 # ====================================================================
+
+# test
+$(TEMP_ASM_OUT): $(TEMP_ASM_OBJ)
+	@mkdir -p $(dir $@)
+	@echo "LD (Test) $<"
+	$(LD) -m elf_i386 -static $< -o $@ -Ttext 0x1001000
 # Default target
-all: image
+
+all: image $(TEMP_ASM_OUT)
 
 # --- Bootloader Rules ---
 # Compile boot.asm and loader.asm

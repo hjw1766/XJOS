@@ -52,6 +52,8 @@ extern int sys_write();
 extern int sys_lseek();
 extern int sys_readdir();
 
+extern int sys_execve();
+
 extern int sys_chdir();
 extern int sys_chroot();
 extern char *sys_getcwd();
@@ -112,6 +114,8 @@ void syscall_init() {
     syscall_table[SYS_NR_WRITE] = sys_write;
     syscall_table[SYS_NR_LSEEK] = sys_lseek;
     syscall_table[SYS_NR_READDIR] = sys_readdir;
+
+    syscall_table[SYS_NR_EXECVE] = sys_execve;
 
     syscall_table[SYS_NR_TIME] = sys_time;
 

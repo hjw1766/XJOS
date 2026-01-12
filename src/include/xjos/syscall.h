@@ -22,6 +22,7 @@ typedef enum {
     SYS_NR_CREAT = 8,
     SYS_NR_LINK = 9,
     SYS_NR_UNLINK = 10,
+    SYS_NR_EXECVE = 11,
     SYS_NR_CHDIR = 12,
     SYS_NR_TIME = 13,
     SYS_NR_MKNOD = 14,
@@ -87,6 +88,8 @@ int read(fd_t fd, char *buf, int len);
 int write(fd_t fd, char *buf, int len);
 int lseek(fd_t fd, off_t offset, int whence);
 int readdir(fd_t fd, void *dir, int count);
+
+int execve(char *filename, char *argv[], char *envp[]);
 
 char *getcwd(char *buf, size_t size);
 int chdir(char *pathname);

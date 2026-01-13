@@ -195,13 +195,17 @@ static void put_page(u32 addr) {
 
 
 u32 get_cr2() {
-    asm volatile("movl %cr2, %eax\n");
+    u32 val;
+    asm volatile("movl %%cr2, %0" : "=r"(val));
+    return val;
 }
 
 
 // get cr3 register value, page directory base address
 u32 _inline get_cr3() {
-    asm volatile("movl %cr3, %eax\n");
+    u32 val;
+    asm volatile("movl %%cr3, %0" : "=r"(val));
+    return val;
     // store eax, return cr3 value
 }
 
@@ -527,7 +531,7 @@ int sys_brk(void *addr) {
     task_t *task = running_task();
     assert(task->uid != KERNEL_USER);
 
-    assert((KERNEL_MEMORY_SIZE <= brk) && (brk < USER_MMAP_ADDR));
+    assert((task->end <= brk) && (brk <= USER_MMAP_ADDR));
     u32 old_brk = task->brk;
 
     // if brk < old_brk, need free page
@@ -570,7 +574,9 @@ void *sys_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t off
         page_entry_t *entry = get_entry(page, false);
         entry->user = true;
         entry->write = false;
+        entry->readonly = true;
         if (prot & PROT_WRITE) {
+            entry->readonly = false;
             entry->write = true;
         }
         if (flags & MAP_SHARED) {
@@ -637,21 +643,23 @@ void page_fault(u32 vector,
     page_error_code_t *code = (page_error_code_t *)&error;
     task_t *task = running_task();
 
-    // 8M -- 128M
+    // 16M -- 256M
     assert((KERNEL_MEMORY_SIZE <= vaddr) && (vaddr < USER_STACK_TOP));
     
     // * Copy-on-Write (CoW)
-    if (code->present) {
-        assert(code->present);  // parent and child process only read
-        
+    if (code->present && code->write) { 
         page_entry_t *entry = get_entry(vaddr, false);
 
-        assert(entry->present);
+        if (entry->readonly) {
+            panic("Segmentation Fault: Write to Read-Only page at 0x%p\n", vaddr);
+        }
+
         assert(!entry->shared);  // not shared page
         assert(memory_map[entry->index] > 0);
         if (memory_map[entry->index] == 1) {
             // parent process exit
             entry->write = true;
+            flush_tlb(vaddr);
             LOGK("write page for 0x%p\n", vaddr);
         } else {
             // >> 12 + << 12, clear offset

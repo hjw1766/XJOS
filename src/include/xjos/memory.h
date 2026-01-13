@@ -58,7 +58,7 @@ typedef struct {
     u8 global : 1;              // global page, can be swapped
     u8 shared : 1;              // shared page
     u8 privat : 1;             // private page
-    u8 flag : 1;               // sys Maintain
+    u8 readonly : 1;           // read only page
     u32 index : 20;           // page index
 }_packed page_entry_t;
 

@@ -10,12 +10,8 @@
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
-#define P_EXEC IXOTH
-#define P_READ IROTH
-#define P_WRITE IWOTH
 
-
-static bool permission(inode_t *inode, u16 mask) {
+bool permission(inode_t *inode, u16 mask) {
     u16 mode = inode->desc->mode;
 
     if (!inode->desc->nlinks)

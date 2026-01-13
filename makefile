@@ -64,8 +64,8 @@ OTHER_OBJS := $(filter-out $(ENTRY_OBJ), $(C_OBJS) $(ASM_OBJS))
 # test
 $(TEMP_ASM_OUT): $(TEMP_ASM_OBJ)
 	@mkdir -p $(dir $@)
-	@echo "LD (Test) $<"
-	$(LD) -m elf_i386 -static $< -o $@ -Ttext 0x1001000
+	@echo "LD (Test) $< -> $@"
+	@$(LD) -m elf_i386 -static $< -o $@ -Ttext 0x1001000
 # Default target
 
 all: image $(TEMP_ASM_OUT)
@@ -74,7 +74,8 @@ all: image $(TEMP_ASM_OUT)
 # Compile boot.asm and loader.asm
 $(BUILD_DIR)/boot/%.bin: $(SRC_DIR)/boot/%.asm
 	@mkdir -p $(dir $@)
-	$(ASM) -f bin $< -o $@
+	@echo "ASM 	$<"
+	@$(ASM) -f bin $< -o $@
 
 # --- Generic Compilation Rules ---
 # This generic rule handles all .c files under any src subdirectory
@@ -82,27 +83,27 @@ $(BUILD_DIR)/boot/%.bin: $(SRC_DIR)/boot/%.asm
 #       src/fs/fat32.c -> build/fs/fat32.o
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(dir $@)
-	@echo "CC $<"
-	$(CC) $(CFLAGS) -c $< -o $@
+	@echo "CC 		$<"
+	@$(CC) $(CFLAGS) -c $< -o $@
 
 # This generic rule handles all kernel .asm files under any src subdirectory
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.asm
 	@mkdir -p $(dir $@)
-	@echo "ASM $<"
-	$(ASM) $(ASMFLAGS) $< -o $@
+	@echo "ASM 		$<"
+	@$(ASM) $(ASMFLAGS) $< -o $@
 
 # --- Link Kernel ---
 $(BUILD_DIR)/kernel.bin: $(ENTRY_OBJ) $(OTHER_OBJS)
 	@mkdir -p $(dir $@)
-	@echo "LD $@"
-	$(LD) $(LDFLAGS) $(ENTRY_OBJ) $(OTHER_OBJS) $(LIBGCC) -o $@ -Ttext $(ENTRYPOINT)
+	@echo "LD 		$@"
+	@$(LD) $(LDFLAGS) $(ENTRY_OBJ) $(OTHER_OBJS) $(LIBGCC) -o $@ -Ttext $(ENTRYPOINT)
 
 # --- Generate Final Image File ---
 $(BUILD_DIR)/system.bin: $(BUILD_DIR)/kernel.bin
-	objcopy -O binary $< $@
+	@objcopy -O binary $< $@
 
 $(BUILD_DIR)/system.map: $(BUILD_DIR)/kernel.bin
-	nm $< | sort > $@
+	@nm $< | sort > $@
 
 include $(SRC_DIR)/utils/image.mk
 include $(SRC_DIR)/utils/cmd.mk

@@ -9,7 +9,7 @@ _start:
     mov eax, 4; write
     mov ebx, 1; stdout
     mov ecx, message
-    mov edx, message.end - message - 1
+    mov edx, message_len
     int 0x80
 
     ; exit(0)
@@ -21,7 +21,7 @@ section .data
 
 message:
     db "Hello, XJOS!", 10, 13, 0
-    .end:
+message_len equ $ - message - 1
 
 section .bss
 

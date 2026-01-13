@@ -2,9 +2,12 @@
 #include <xjos/syscall.h>
 #include <fs/fs.h>
 #include <xjos/memory.h>
+#include <xjos/stdlib.h>
 #include <libc/string.h>
 #include <libc/assert.h>
 #include <xjos/debug.h>
+#include <xjos/task.h>
+#include <xjos/global.h>
 
 
 #if 0
@@ -175,89 +178,153 @@ enum SymbolType {
     STT_HIPROC = 15        // Processor-specific
 };
 
+// check ELF header validity
+static bool elf_validate(Elf32_Ehdr *ehdr) {
+    if (memcmp(&ehdr->e_ident, "\177ELF\1\1\1", 7))
+        return false;
+
+    if (ehdr->e_type != ET_EXEC)
+        return false;
+
+    if (ehdr->e_machine != EM_386)
+        return false;
+    
+    if (ehdr->e_version != EV_CURRENT)
+        return false;
+
+    if (ehdr->e_phentsize != sizeof(Elf32_Phdr))
+        return false;
+
+    return true;
+}
+
+static void load_segment(inode_t *inode, Elf32_Phdr *phdr) {
+    assert(phdr->p_align == 0x1000);        // page aligned
+    assert((phdr->p_vaddr & 0xfff) == 0);
+
+    u32 vaddr = phdr->p_vaddr;
+
+    // need pages, .bss may need more
+    u32 count = div_round_up(MAX(phdr->p_memsz, phdr->p_filesz), PAGE_SIZE);
+
+    // map pages
+    for (size_t i = 0; i < count; i++) {
+        u32 addr = vaddr + i * PAGE_SIZE;
+        assert(addr >= USER_EXEC_ADDR && addr < USER_MMAP_ADDR);
+        link_page(addr);
+    }
+
+    inode_read(inode, (char *)vaddr, phdr->p_filesz, phdr->p_offset);
+    // 如果有.bss段，清零
+    if (phdr->p_filesz < phdr->p_memsz) {
+        memset((char *)vaddr + phdr->p_filesz, 0, phdr->p_memsz - phdr->p_filesz);
+    }
+
+    // if segment write protected, set page read-only
+    if ((phdr->p_flags & PF_W) == 0) {
+        for (size_t i = 0; i < count; i++) {
+            u32 addr = vaddr + i * PAGE_SIZE;
+            page_entry_t *entry = get_entry(addr, false);
+            entry->write = false;
+            entry->readonly = true;
+            flush_tlb(addr);
+        }
+    }
+
+    task_t *task = running_task();
+    if (phdr->p_flags == (PF_R | PF_X)) {
+        task->text = vaddr;      // 代码段起始地址
+    } else if (phdr->p_flags == (PF_R | PF_W)) {
+        task->data = vaddr;      // 数据段起始地址
+    }
+
+    // 更新进程的 end 地址，向上取整到页边界
+    task->end = MAX(task->end, vaddr + count * PAGE_SIZE);
+}
+
+static u32 load_elf(inode_t *inode) {
+    link_page(USER_EXEC_ADDR); // link first page for ELF header
+
+    int n = 0;
+    // read ELF header
+    n = inode_read(inode, (char *)USER_EXEC_ADDR, sizeof(Elf32_Ehdr), 0);
+    assert(n == sizeof(Elf32_Ehdr));
+
+    Elf32_Ehdr *ehdr = (Elf32_Ehdr *)USER_EXEC_ADDR;
+    if (!elf_validate(ehdr))
+        return EOF;
+
+    // read program headers
+    Elf32_Phdr *phdr = (Elf32_Phdr *)(USER_EXEC_ADDR + sizeof(Elf32_Ehdr));
+    n = inode_read(inode, (char *)phdr, ehdr->e_phnum * ehdr->e_phentsize, ehdr->e_phoff);
+
+    Elf32_Phdr *ptr = phdr;
+    for (size_t i = 0; i < ehdr->e_phnum; i++) {
+        if (ptr->p_type != PT_LOAD)
+            continue;
+        load_segment(inode, ptr);
+        ptr++;
+    }
+
+    return ehdr->e_entry;
+}
+
+extern int sys_brk();
 
 int sys_execve(char *filename, char *argv[], char *envp[]) {
-    fd_t fd = open(filename, O_RDONLY, 0);
-    if (fd == EOF) return EOF;
+    inode_t *inode = namei(filename);
+    int ret = EOF;
+    if (!inode)
+        goto rollback;
 
-    // 1. 读取 ELF Header
-    Elf32_Ehdr *ehdr = (Elf32_Ehdr *)alloc_kpage(1);
-    lseek(fd, 0, SEEK_SET);
-    read(fd, (char *)ehdr, sizeof(Elf32_Ehdr));
-
-    // 2. 读取 Section Headers (节头表)
-    Elf32_Shdr *shdr = (Elf32_Shdr *)alloc_kpage(1);
-    lseek(fd, ehdr->e_shoff, SEEK_SET);
-    read(fd, (char *)shdr, ehdr->e_shnum * ehdr->e_shentsize);
-
-    // 3. 读取 .shstrtab (节名字符串表)
-    char *shstrtab = (char *)alloc_kpage(1);
-    Elf32_Shdr *shstr_hdr = &shdr[ehdr->e_shstrndx];
-    lseek(fd, shstr_hdr->sh_offset, SEEK_SET);
-    read(fd, shstrtab, shstr_hdr->sh_size);
-
-    int strtab_idx = -1;
-    int symtab_idx = -1;
-
-    // 4. 线性遍历节头表，找到 .strtab 和 .symtab 的索引
-    for (size_t i = 0; i < ehdr->e_shnum; i++) {
-        char *name = shstrtab + shdr[i].sh_name;
-        LOGK("[%d] section name: %s (type=%d)\n", i, name, shdr[i].sh_type);
-
-        if (!strcmp(name, ".strtab")) {
-            strtab_idx = i;
-        } else if (!strcmp(name, ".symtab")) {
-            symtab_idx = i;
-        }
-    }
-
-    // 5. 处理符号名字符串池 (.strtab)
-    char *strtab = NULL;
-    if (strtab_idx != -1) {
-        strtab = (char *)alloc_kpage(1);
-        Elf32_Shdr *sptr = &shdr[strtab_idx];
-        lseek(fd, sptr->sh_offset, SEEK_SET);
-        read(fd, strtab, sptr->sh_size);
-        
-        // 测试打印：打印池子里的所有字符串
-        char *nn = strtab + 1; // 跳过第一个 \0
-        while (nn < strtab + sptr->sh_size && *nn) {
-            LOGK("strtab_pool_content: %s\n", nn);
-            nn += strlen(nn) + 1;
-        }
-    }
-
-    // 6. 处理符号表 (.symtab)
-    if (symtab_idx != -1 && strtab != NULL) {
-        Elf32_Sym *symtab = (Elf32_Sym *)alloc_kpage(1);
-        Elf32_Shdr *sym_hdr = &shdr[symtab_idx];
-        lseek(fd, sym_hdr->sh_offset, SEEK_SET);
-        read(fd, (char *)symtab, sym_hdr->sh_size);
-
-        int count = sym_hdr->sh_size / sym_hdr->sh_entsize;
-        for (int i = 0; i < count; i++) {
-            Elf32_Sym *s = &symtab[i];
-            
-            char *sym_name = (s->st_name == 0) ? "(no name)" : &strtab[s->st_name];
-
-            LOGK("Sym[%d] Val: 0x%p Size: %d Bind: %d Type: %d Name: %s\n",
-                 i,
-                 s->st_value,
-                 s->st_size,
-                 ELF32_ST_BIND(s->st_info),
-                 ELF32_ST_TYPE(s->st_info),
-                 sym_name);
-        }
-        free_kpage((u32)symtab, 1);
-    }
-
-    // 7. 清理内存
-    if (strtab) free_kpage((u32)strtab, 1);
-    free_kpage((u32)shstrtab, 1);
-    free_kpage((u32)shdr, 1);
-    free_kpage((u32)ehdr, 1);
+    if (!ISFILE(inode->desc->mode))
+        goto rollback;
     
-    close(fd);
-    return 0;
+    if (!permission(inode, P_EXEC))
+        goto rollback;
+    
+    task_t *task = running_task();
+    strlcpy(task->name, filename, TASK_NAME_LEN);
+
+    // todo argrs, envp
+
+    task->end = USER_EXEC_ADDR;
+    sys_brk(USER_EXEC_ADDR); // reset brk
+
+    // load
+    u32 entry = load_elf(inode);
+    if (entry == EOF)
+        goto rollback;
+
+    sys_brk((u32)task->end); // set brk to new end  
+
+    iput(task->iexec);
+    task->iexec = inode;
+
+    // 栈顶预留 intr_frame_t
+    intr_frame_t *iframe = (intr_frame_t *)((u32)task + PAGE_SIZE - sizeof(intr_frame_t));
+
+    memset(iframe, 0, sizeof(intr_frame_t));
+    iframe->cs = USER_CODE_SELECTOR | 3;
+    iframe->ds = USER_DATA_SELECTOR | 3;
+    iframe->es = USER_DATA_SELECTOR | 3;
+    iframe->fs = USER_DATA_SELECTOR | 3;
+    iframe->gs = USER_DATA_SELECTOR | 3;
+    iframe->ss = USER_DATA_SELECTOR | 3;
+
+    iframe->eip = entry;
+    iframe->esp = (u32)USER_STACK_TOP; // 用户栈顶
+
+    iframe->eflags = (0x200 | 0x2); // IF=1 (开中断), IOPL=0
+
+    // switch to user mode
+    asm volatile (
+        "movl %0, %%esp \n"             // load new intr_frame
+        "jmp interrupt_exit\n"          // jump to interrupt_exit to iret
+        :: "r"(iframe) : "memory");
+
+rollback:
+    iput(inode);
+    return ret;
 }
 

@@ -5,6 +5,7 @@
 #include <libc/assert.h>
 #include <xjos/time.h>
 #include <fs/fs.h>
+#include <xjos/memory.h>
 
 
 #define MAX_CMD_LEN 256
@@ -330,6 +331,25 @@ void builtin_exit(int argc, char *argv[]) {
     exit(code);
 }
 
+void builtin_exec(int argc, char *argv[]) {
+    if (argc < 2) {
+        printf("exec: missing operand\n");
+        printf("Usage: exec <program> [args...]\n");
+        return;
+    }
+
+    int status;
+    pid_t pid = fork();
+
+    if (pid) {
+        pid_t child = waitpid(pid, &status);
+        printf("Process %d exited with status %d\n", child, status);
+    } else {
+        int i = execve(argv[1], NULL, NULL);
+        exit(i);    // hlt if execve failed
+    }
+}
+
 // -------- command table --------
 
 static const cmd_t cmd_table[] = {
@@ -349,6 +369,7 @@ static const cmd_t cmd_table[] = {
     {"mount",builtin_mount,"Mount a filesystem"},
     {"umount",builtin_umount,"Unmount a filesystem"},
     {"mkfs", builtin_mkfs, "Create a filesystem"},
+    {"exec", builtin_exec, "Execute a program"},
     {NULL, NULL, NULL}
 };
 
@@ -424,8 +445,6 @@ static int cmd_parse(char *cmd, char *argv[], char token) {
 }
 
 int osh_main() {
-    execve("/hello.out", NULL, NULL); // test execve
-
     memset(cmd, 0, sizeof(cmd));
     
     getcwd(cwd, MAX_PATH_LEN);

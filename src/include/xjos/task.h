@@ -73,6 +73,9 @@ typedef struct task_t {
     int32 status;            // 退出状态码 (exit code)
     pid_t waitpid;           // 正在等待的子进程 PID
     char *pwd;              // 当前工作目录路径字符串
+    u32 text;               // 代码段起始地址
+    u32 data;               // 数据段起始地址
+    u32 end;                // BSS 段结束地址
 
     // === 3. 内存管理 ===
     u32 pde;                 // 页目录表物理地址 (CR3)
@@ -82,6 +85,7 @@ typedef struct task_t {
     // === 4. 文件系统 ===
     struct inode_t *ipwd;    // 当前工作目录
     struct inode_t *iroot;   // 根目录
+    struct inode_t *iexec;   // 可执行文件 inode
     u16 umask;               // 创建文件权限掩码
     struct file_t *files[TASK_FILE_NR]; // 进程文件表
 

@@ -234,6 +234,7 @@ pid_t task_fork() {
     // dir ref count
     if (child->ipwd) child->ipwd->count++;
     if (child->iroot) child->iroot->count++;
+    if (child->iexec) child->iexec->count++;
 
     // 深拷贝 pwd
     child->pwd = kmalloc(MAX_PATH_LEN);
@@ -289,7 +290,11 @@ static task_t *task_create(target_t target, const char *name, int nice, u32 uid)
     task->vmap = &kernel_map;
     task->pde = KERNEL_PAGE_DIR;
     
-    task->brk = KERNEL_MEMORY_SIZE;
+    task->brk = USER_EXEC_ADDR;     // 待分配
+    task->text = USER_EXEC_ADDR;
+    task->data = USER_EXEC_ADDR;
+    task->end  = USER_EXEC_ADDR;
+    task->iexec = NULL;
     task->iroot = task->ipwd = get_root_inode();
     task->iroot->count += 2; // 引用计数增加
 
@@ -321,6 +326,8 @@ static task_t *task_create(target_t target, const char *name, int nice, u32 uid)
     
     frame->eip = (void *)target; // 线程入口函数
     frame->ebx = 0x11111111;
+    frame->esi = 0x22222222;
+    frame->edi = 0x33333333;
     frame->ebp = 0x44444444;
     
     task->stack = (u32 *)frame;
@@ -353,6 +360,7 @@ void task_exit(int status) {
     kfree(task->pwd);
     iput(task->ipwd);
     iput(task->iroot);
+    iput(task->iexec);    
 
     for (size_t i = 0; i < TASK_FILE_NR; i++) {
         file_t *file = task->files[i];
@@ -471,7 +479,7 @@ void task_to_user_mode(target_t target) {
     
     iframe->eip = (u32)target;
     iframe->esp = USER_STACK_TOP; // 用户栈顶
-    iframe->eflags = (0x200 | 0x3000); // IF=1 (开中断), IOPL=3
+    iframe->eflags = (0x200 | 0x2); // IF=1 (开中断), IOPL=0
 
     // 暴力修改 ESP 并跳转到中断退出函数
     // 这样执行 iret 时就会弹出我们构造的 Ring3 上下文

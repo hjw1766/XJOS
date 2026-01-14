@@ -8,6 +8,7 @@ extern void arena_init();
 extern void task_init();
 extern void syscall_init();
 extern void keyboard_init();
+extern void serial_init();
 extern void tss_init();
 extern void ide_init();
 extern void ramdisk_init();
@@ -33,6 +34,7 @@ void kernel_init() {
     clock_init();
     keyboard_init();
     time_init();
+    serial_init();
     ide_init();
     ramdisk_init();   
     syscall_init();

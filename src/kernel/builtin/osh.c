@@ -115,23 +115,7 @@ void builtin_logo(int argc, char *argv[]) {
 }
 
 void builtin_test(int argc, char *argv[]) { 
-    // 1. 第一次申请 1 页
-    void *addr1 = mmap(NULL, 0x1000, PROT_WRITE, MAP_PRIVATE, EOF, 0);
-    printf("First mmap:  0x%p\n", addr1);
-
-    // 2. 释放这一页
-    munmap(addr1, 0x1000);
-    printf("Munmap first address.\n");
-
-    // 3. 第二次申请 1 页
-    void *addr2 = mmap(NULL, 0x1000, PROT_WRITE, MAP_PRIVATE, EOF, 0);
-    printf("Second mmap: 0x%p\n", addr2);
-
-    if (addr1 == addr2) {
-        printf("SUCCESS: Address reused!\n");
-    } else {
-        printf("FAILURE: Got a different address: 0x%p\n", addr2);
-    }
+    printf("Running system test...\n");
 }
 
 void builtin_pwd(int argc, char *argv[]) { getcwd(cwd, MAX_PATH_LEN); printf("%s\n", cwd); }

@@ -18,6 +18,7 @@ enum device_type_t {
 enum device_subtype_t {
     DEV_CONSOLE = 1,    // console
     DEV_KEYBOARD,       // keyboard
+    DEV_SERIAL,         // serial port
     DEV_IDE_DISK,       // IDE disk
     DEV_IDE_PART,        // IDE disk part
     DEV_RAMDISK,      // ramdisk

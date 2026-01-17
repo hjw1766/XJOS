@@ -2,7 +2,7 @@
 #define XJOS_RB_TREE_H
 
 
-#include <libc/stddef.h>
+#include <xjos/stddef.h>
 
 #define container_of(ptr, type, member) \
     element_entry(type, member, ptr)

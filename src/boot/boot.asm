@@ -101,7 +101,7 @@ read_disk:
 
     .waits:
         mov dx, 0x1f7    ; disk status
-        .check
+        .check:
             in al, dx
             ; delay
             jmp $+2

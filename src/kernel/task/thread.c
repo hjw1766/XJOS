@@ -3,7 +3,7 @@
 #include <xjos/debug.h>
 #include <xjos/mutex.h>
 #include <xjos/spinlock.h>
-#include <libc/stdio.h>
+#include <xjos/stdio.h>
 #include <xjos/arena.h>
 #include <fs/buffer.h>
 

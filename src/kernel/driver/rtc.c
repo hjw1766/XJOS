@@ -3,7 +3,7 @@
 #include <hardware/io.h>
 #include <xjos/interrupt.h>
 #include <xjos/time.h>
-#include <libc/assert.h>
+#include <xjos/assert.h>
 #include <xjos/stdlib.h>
 
 

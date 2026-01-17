@@ -1,8 +1,8 @@
 #include <xjos/memory.h>
-#include <libc/string.h>
+#include <xjos/string.h>
 #include <drivers/device.h>
-#include <libc/stdio.h>
-#include <libc/assert.h>
+#include <xjos/stdio.h>
+#include <xjos/assert.h>
 #include <xjos/debug.h>
 
 #define SECTOR_SIZE 512

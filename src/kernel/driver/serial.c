@@ -3,11 +3,11 @@
 #include <xjos/fifo.h>
 #include <xjos/task.h>
 #include <xjos/mutex.h>
-#include <libc/assert.h>
+#include <xjos/assert.h>
 #include <drivers/device.h>
 #include <xjos/debug.h>
-#include <libc/stdarg.h>
-#include <libc/stdio.h>
+#include <xjos/stdarg.h>
+#include <xjos/stdio.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 

@@ -1,8 +1,8 @@
 #include <xjos/syscall.h>
-#include <libc/string.h>
+#include <xjos/string.h>
 #include <xjos/stdlib.h>
-#include <libc/stdio.h>
-#include <libc/assert.h>
+#include <xjos/stdio.h>
+#include <xjos/assert.h>
 #include <xjos/time.h>
 #include <fs/fs.h>
 #include <xjos/memory.h>
@@ -15,7 +15,7 @@
 
 static char cwd[MAX_PATH_LEN];
 static char cmd[MAX_CMD_LEN];
-static char *argv[MAX_ARG_NR];
+static char *args[MAX_ARG_NR];
 static char buf[BUFLEN];
 
 
@@ -28,6 +28,20 @@ typedef struct {
 } cmd_t;
 
 static const cmd_t cmd_table[];
+
+static char *envp[] = {
+    "HOME=/",
+    "PATH=/bin",
+    NULL
+};
+
+static const char *logo[] = {
+        "__  __   _  _____ ____ ",
+        "\\ \\/ /  | |/ _ \\ / ___|",
+        " \\  /_  | | | | |\\___ \\",
+        " /  \\ |_| | |_| |___) |",
+        "/_/\\_\\\\___/ \\___/|____/ "
+};
 
 // ---------- helper function ----------
 
@@ -45,6 +59,19 @@ static void print_prompt() {
     const char *base = basename(cwd);
     if (*base == '\0') base = "/";
     printf("[root %s]# ", base);
+}
+
+static void spawn_process(char *filename, char *argv[]) {
+    int status;
+    pid_t pid = fork();
+
+    if (pid) {
+        pid_t child = waitpid(pid, &status);
+    } else {
+        int i = execve(filename, argv, envp);
+        printf("osh: command not found or execution failed: %s\n", filename);
+        exit(i);    // hlt if execve failed
+    }
 }
 
 static void strftime(time_t stamp, char *buf) {
@@ -88,14 +115,6 @@ static void parsemode(int mode, char *buf) {
 
 void builtin_logo(int argc, char *argv[]) {
     clear();
-
-    static const char *logo[] = {
-        "__  __   _  _____ ____ ",
-        "\\ \\/ /  | |/ _ \\ / ___|",
-        " \\  /_  | | | | |\\___ \\",
-        " /  \\ |_| | |_| |___) |",
-        "/_/\\_\\\\___/ \\___/|____/ "
-    };
 
     int terminal_width = 80; 
     int logo_width = 23;     
@@ -228,108 +247,21 @@ void builtin_cd(int argc, char *argv[]) {
     }
 }
 
-void builtin_ls(int argc, char *argv[]) {
-    bool list = false;
-    char *target = NULL;
-    
-    // parse args
-    for (int i = 1; i < argc; i++) {
-        if (!strcmp(argv[i], "-l")) {
-            list = true;
-        } else {
-            target = argv[i];
-        }
-    }
-
-    // default target: cwd
-    if (!target) {
-        getcwd(cwd, MAX_PATH_LEN);
-        target = cwd;
-    }
-
-    fd_t fd = open(target, O_RDONLY, 0);
-    if (fd == EOF) {
-        printf("ls: cannot access '%s': No such file or directory\n", target);
-        return;
-    }
-
-
-    dentry_t entry;
-    while (readdir(fd, &entry, 1) != EOF) {
-        if (!entry.nr) continue; // skip empty entry
-        if (!strcmp(entry.name, ".") || !strcmp(entry.name, "..")) continue;
-        if (!list) {
-            printf("%s  ", entry.name);
-            continue;
-        }
-        // -l
-        stat_t statbuf;
-        stat(entry.name, &statbuf);
-        parsemode(statbuf.mode, buf);
-        printf("%s ", buf);
-
-        strftime(statbuf.ctime, buf);
-        printf("% 2d % 2d % 2d % 2d %s %s\n",
-               statbuf.nlinks,
-               statbuf.uid,
-               statbuf.gid,
-               statbuf.size,
-               buf,
-               entry.name);
-    }
-    if (!list) printf("\n");
-    close(fd);
-}
-
-void builtin_cat(int argc, char *argv[]) {
-    if (argc < 2) {
-        printf("cat: missing operand\n");
-        printf("Usage: cat <file>\n");
-        return;
-    }
-
-    stat_t statbuf;
-    if (stat(argv[1], &statbuf) == 0) {
-        if ((statbuf.mode & IFMT) == IFDIR) {
-            printf("cat: %s: Is a directory\n", argv[1]);
-            return;
-        }
-    }
-
-    fd_t fd = open(argv[1], O_RDONLY, 0);
-    if (fd == EOF) {
-        printf("cat: %s: No such file\n", argv[1]);
-        return;
-    }
-
-    int len;
-    while ((len = read(fd, buf, BUFLEN)) > 0) {
-        write(STDOUT_FILENO, buf, len);
-    }
-    close(fd);
-}
-
 void builtin_exit(int argc, char *argv[]) {
     int code = 0;
     if (argc == 2) code = atoi(argv[1]); // string to int
     exit(code);
 }
 
-void builtin_exec(int argc, char *argv[]) {
-    if (argc < 2) {
-        printf("exec: missing operand\n");
-        printf("Usage: exec <program> [args...]\n");
-        return;
-    }
-
+void builtin_exec(char *filename, int argc, char *argv[]) {
     int status;
     pid_t pid = fork();
 
     if (pid) {
         pid_t child = waitpid(pid, &status);
-        printf("Process %d exited with status %d\n", child, status);
+        return;
     } else {
-        int i = execve(argv[1], NULL, NULL);
+        int i = execve(filename, argv, envp);
         exit(i);    // hlt if execve failed
     }
 }
@@ -345,15 +277,12 @@ static const cmd_t cmd_table[] = {
     {"mkdir",builtin_mkdir,"Make directory"},
     {"rmdir",builtin_rmdir,"Remove directory"},
     {"rm",   builtin_rm,   "Remove file"},
-    {"ls",   builtin_ls,   "List directory contents"},
-    {"cat",  builtin_cat,  "Concatenate and display file content"},
     {"exit", builtin_exit, "Exit the shell"},
     {"date", builtin_date, "Display current system date and time"},
     {"help", builtin_help, "Display this help message"},
     {"mount",builtin_mount,"Mount a filesystem"},
     {"umount",builtin_umount,"Unmount a filesystem"},
     {"mkfs", builtin_mkfs, "Create a filesystem"},
-    {"exec", builtin_exec, "Execute a program"},
     {NULL, NULL, NULL}
 };
 
@@ -369,6 +298,34 @@ static void execute(int argc, char *argv[]) {
             return;
         }
         ptr++;
+    }
+
+    stat_t statbuf;
+
+
+    // /bin/xx or ./a.out
+    if (strchr(cmd_name, '/')) {
+        if (stat(cmd_name, &statbuf) != EOF) {
+            spawn_process(cmd_name, argv);
+            return;
+        } else {
+            printf("osh: no such file or directory: %s\n", cmd_name);
+        }
+
+        return;
+    }
+
+    // search in bin, (hello or hello.out)
+    sprintf(buf, "/bin/%s", cmd_name);
+    if (stat(buf, &statbuf) != EOF) {
+        spawn_process(buf, argv);
+        return;
+    }
+
+    sprintf(buf, "/bin/%s.out", cmd_name);
+    if (stat(buf, &statbuf) != EOF) {
+        spawn_process(buf, argv);
+        return;
     }
 
     // todo: outer command
@@ -441,9 +398,9 @@ int osh_main() {
 
         if (cmd[0] == 0) continue;  // empty command '\n'
         
-        int argc = cmd_parse(cmd, argv, ' ');
+        int argc = cmd_parse(cmd, args, ' ');
         if (argc > 0) {
-            execute(argc, argv);
+            execute(argc, args);
         }
     }
 

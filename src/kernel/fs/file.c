@@ -1,6 +1,6 @@
 #include <fs/fs.h>
 #include <fs/stat.h>
-#include <libc/assert.h>
+#include <xjos/assert.h>
 #include <xjos/task.h>
 #include <drivers/device.h>
 #include <xjos/syscall.h>

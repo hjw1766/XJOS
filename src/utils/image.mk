@@ -3,8 +3,8 @@ $(BUILD_DIR)/master.img: $(BUILD_DIR)/boot/boot.bin \
 	$(BUILD_DIR)/system.bin \
 	$(BUILD_DIR)/system.map \
 	$(SRC_DIR)/utils/master.sfdisk \
-	$(BUILD_DIR)/kernel/builtin/hello.out
-
+	$(BUILTIN_APPS) \
+	
 # create 16M disk image
 	yes | bximage -q -hd=16 -func=create -sectsize=512 -imgmode=flat $@
 
@@ -36,13 +36,18 @@ $(BUILD_DIR)/master.img: $(BUILD_DIR)/boot/boot.bin \
 	sudo chown ${USER} /mnt
 
 # mkdir
+	mkdir -p /mnt/bin
 	mkdir -p /mnt/dev
 	mkdir -p /mnt/mnt
 
-# file
-	echo "hello xjos!!!, from root dir file..." > /mnt/hello.txt
+# copy builtin apps
+	for app in $(BUILTIN_APPS); \
+	do \
+		cp $$app /mnt/bin; \
+	done
 
-	cp $(BUILD_DIR)/kernel/builtin/hello.out /mnt/hello.out
+# file
+	echo "hello xjos!!!" > /mnt/hello.txt
 
 # Fix gip bug
 	sudo chown -R 1000:0 /mnt

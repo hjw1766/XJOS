@@ -1,8 +1,8 @@
 #include <drivers/device.h>
 #include <xjos/syscall.h>
 #include <fs/stat.h>
-#include <libc/stdio.h>
-#include <libc/assert.h>
+#include <xjos/stdio.h>
+#include <xjos/assert.h>
 #include <fs/fs.h>
 
 extern file_t file_table[];

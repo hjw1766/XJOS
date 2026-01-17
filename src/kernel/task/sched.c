@@ -3,10 +3,10 @@
 #include <xjos/printk.h>
 #include <xjos/debug.h>
 #include <xjos/memory.h>
-#include <libc/assert.h>
+#include <xjos/assert.h>
 #include <xjos/interrupt.h>
 #include <xjos/rbtree.h>
-#include <libc/string.h>
+#include <xjos/string.h>
 
 // === Internal CFS Ready Queue ===
 static rb_root_t cfs_ready_root = RB_ROOT; // rbtree root

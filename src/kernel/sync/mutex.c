@@ -1,6 +1,6 @@
 #include <xjos/mutex.h>
 #include <xjos/interrupt.h>
-#include <libc/assert.h>
+#include <xjos/assert.h>
 
 
 void mutex_init(mutex_t *lock) {

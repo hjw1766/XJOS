@@ -1,9 +1,9 @@
 #include <xjos/types.h>
 #include <xjos/debug.h>
-#include <libc/assert.h>
+#include <xjos/assert.h>
 #include <xjos/memory.h>
 #include <xjos/stdlib.h>
-#include <libc/string.h>
+#include <xjos/string.h>
 #include <xjos/bitmap.h>
 #include <xjos/task.h>
 #include <xjos/syscall.h>
@@ -158,7 +158,6 @@ static u32 get_page() {
             free_pages--;
 
             LOGK("Get page index 0x%x\n", i);
-            assert(free_pages >= 0);
 
             u32 page = PAGE(i);  // current page address
             LOGK("Get page addr 0x%p\n", page);

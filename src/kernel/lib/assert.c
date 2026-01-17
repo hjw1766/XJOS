@@ -1,6 +1,6 @@
-#include <libc/assert.h>
+#include <xjos/assert.h>
 #include <xjos/printk.h>
-#include <libc/stdio.h>
+#include <xjos/stdio.h>
 #include <xjos/types.h>
 #include <xjos/syscall.h>
 

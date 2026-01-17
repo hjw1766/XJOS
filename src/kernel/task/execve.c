@@ -3,11 +3,12 @@
 #include <fs/fs.h>
 #include <xjos/memory.h>
 #include <xjos/stdlib.h>
-#include <libc/string.h>
-#include <libc/assert.h>
+#include <xjos/string.h>
+#include <xjos/assert.h>
 #include <xjos/debug.h>
 #include <xjos/task.h>
 #include <xjos/global.h>
+#include <xjos/arena.h>
 
 
 #if 0
@@ -269,6 +270,87 @@ static u32 load_elf(inode_t *inode) {
     return ehdr->e_entry;
 }
 
+static int count_argv(char *argv[]) {
+    if (!argv)  
+        return 0;
+
+    int i = 0;
+    while (argv[i])
+        i++;
+    return i;
+}
+
+static u32 copy_argv_envp(char *filename, char *argv[], char *envp[]) {
+    int argc = count_argv(argv);
+    int envc = count_argv(envp);
+
+    // allocate kernel pages for argv and envp
+    u32 pages = alloc_kpage(4);
+    u32 pages_end = pages + 4 * PAGE_SIZE;
+
+    // kernel temp stack top
+    char *ktop = (char *)pages_end;
+    // user stack top
+    char *utop = (char *)USER_STACK_TOP;
+
+    // kernel args
+    char **argvk = (char **)alloc_kpage(1);
+    argvk[argc] = NULL;
+
+    // kernel envs
+    char **envpk = argvk + argc + 1;
+    envpk[envc] = NULL;
+
+    int len = 0;
+
+    //copy envp
+    for (int i = envc - 1; i >= 0; i--) {
+        len = strlen(envp[i]) + 1;
+        ktop -= len;
+        utop -= len;
+        memcpy(ktop, envp[i], len);
+        envpk[i] = utop;
+    }
+
+    // copy argv
+    for (int i = argc - 1; i >= 0; i--) {
+        len = strlen(argv[i]) + 1;
+        ktop -= len;
+        utop -= len;
+        memcpy(ktop, argv[i], len);
+        argvk[i] = utop;
+    }
+
+    // // copy filename argv[0]
+    // len = strlen(filename) + 1;
+    // ktop -= len;
+    // utop -= len;
+    // memcpy(ktop, filename, len);
+    // argvk[0] = utop;
+
+    // store argv and envp pointers
+    ktop -= (envc + 1) * 4;
+    memcpy(ktop, envpk, (envc + 1) * 4);
+
+    ktop -= (argc + 1) * 4;
+    memcpy(ktop, argvk, (argc + 1) * 4);
+
+    ktop -= 4;
+    *(int *)ktop = argc;
+
+    assert((u32)ktop > pages);
+
+    // copy to user stack
+    len = (pages_end - (u32)ktop);
+    utop = (char *)(USER_STACK_TOP - len);
+    memcpy(utop, ktop, len);
+
+    free_kpage((u32)argvk, 1);
+    free_kpage(pages, 4);
+
+    return (u32)utop;
+}
+
 extern int sys_brk();
 
 int sys_execve(char *filename, char *argv[], char *envp[]) {
@@ -286,7 +368,7 @@ int sys_execve(char *filename, char *argv[], char *envp[]) {
     task_t *task = running_task();
     strlcpy(task->name, filename, TASK_NAME_LEN);
 
-    // todo argrs, envp
+    u32 top = copy_argv_envp(filename, argv, envp);
 
     task->end = USER_EXEC_ADDR;
     sys_brk(USER_EXEC_ADDR); // reset brk
@@ -312,8 +394,9 @@ int sys_execve(char *filename, char *argv[], char *envp[]) {
     iframe->gs = USER_DATA_SELECTOR | 3;
     iframe->ss = USER_DATA_SELECTOR | 3;
 
+    iframe->edx = 0; // todo 动态链接器
     iframe->eip = entry;
-    iframe->esp = (u32)USER_STACK_TOP; // 用户栈顶
+    iframe->esp = top; // 用户栈顶
 
     iframe->eflags = (0x200 | 0x2); // IF=1 (开中断), IOPL=0
 
@@ -327,4 +410,3 @@ rollback:
     iput(inode);
     return ret;
 }
-

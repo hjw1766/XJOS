@@ -2,7 +2,7 @@
 #define XJOS_FIFO_H_
 
 #include <xjos/types.h>
-#include <libc/assert.h>
+#include <xjos/assert.h>
 
 typedef struct {
     char *buf;

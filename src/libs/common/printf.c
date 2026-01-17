@@ -1,5 +1,5 @@
-#include <libc/stdarg.h>
-#include <libc/stdio.h>
+#include <xjos/stdarg.h>
+#include <xjos/stdio.h>
 #include <xjos/syscall.h>
 
 static char buf[1024];

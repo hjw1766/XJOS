@@ -3,9 +3,9 @@
 #include <xjos/printk.h>
 #include <xjos/debug.h>
 #include <xjos/memory.h>
-#include <libc/assert.h>
+#include <xjos/assert.h>
 #include <xjos/interrupt.h>
-#include <libc/string.h>
+#include <xjos/string.h>
 #include <xjos/bitmap.h>
 #include <xjos/syscall.h>
 #include <xjos/list.h>
@@ -380,6 +380,8 @@ void task_exit(int status) {
         child->ppid = parent->pid;
         list_pushback(&parent->children, &child->sibling);
     }
+
+    LOGK("task %s 0x%p exit...\n", task->name, task);
 
     // 4. 通知父进程
     // 如果父进程正在等待 (WAITING) 且条件满足，则唤醒它

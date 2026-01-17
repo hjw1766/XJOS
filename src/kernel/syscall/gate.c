@@ -1,11 +1,11 @@
 #include <xjos/interrupt.h>
-#include <libc/assert.h>
+#include <xjos/assert.h>
 #include <xjos/debug.h>
 #include <xjos/syscall.h>
 #include <xjos/task.h>
 #include <xjos/memory.h>
 #include <drivers/device.h>
-#include <libc/string.h>
+#include <xjos/string.h>
 #include <fs/buffer.h>
 
 extern void link_page(u32 vaddr);

@@ -1,7 +1,7 @@
 #ifndef XJOS_STDIO_H
 #define XJOS_STDIO_H
 
-#include <libc/stdarg.h>
+#include <xjos/stdarg.h>
 
 
 int vsprintf(char *buf, const char *fmt, va_list args);

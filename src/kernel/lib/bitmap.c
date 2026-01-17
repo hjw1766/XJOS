@@ -1,7 +1,7 @@
 #include <xjos/xjos.h>
-#include <libc/assert.h>
+#include <xjos/assert.h>
 #include <xjos/bitmap.h>
-#include <libc/string.h>
+#include <xjos/string.h>
 
 
 void bitmap_init(bitmap_t *map, char *bits, u32 length, u32 start) {

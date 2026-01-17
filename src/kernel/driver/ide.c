@@ -1,13 +1,13 @@
 #include <hardware/ide.h>
 #include <hardware/io.h>
 #include <xjos/printk.h>
-#include <libc/stdio.h>
+#include <xjos/stdio.h>
 #include <xjos/memory.h>
 #include <xjos/interrupt.h>
 #include <xjos/task.h>
-#include <libc/string.h>
+#include <xjos/string.h>
 #include <xjos/debug.h>
-#include <libc/assert.h>
+#include <xjos/assert.h>
 #include <drivers/device.h>
 
 

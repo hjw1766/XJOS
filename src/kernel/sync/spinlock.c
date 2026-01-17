@@ -1,6 +1,6 @@
 #include <xjos/spinlock.h>
 #include <xjos/interrupt.h>
-#include <libc/assert.h>
+#include <xjos/assert.h>
 
 
 void spin_init(spinlock_t *lock, const char *name) {

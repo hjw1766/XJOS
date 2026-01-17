@@ -1,4 +1,4 @@
-#include <libc/string.h>
+#include <xjos/string.h>
 
 /*
  * strcpy - Copy a string

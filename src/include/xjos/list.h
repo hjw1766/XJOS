@@ -1,8 +1,8 @@
 #ifndef XJOS_LIST_H
 #define XJOS_LIST_H
 
-#include <libc/stddef.h>
-#include <libc/assert.h>
+#include <xjos/stddef.h>
+#include <xjos/assert.h>
 
 
 

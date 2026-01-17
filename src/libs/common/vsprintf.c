@@ -1,8 +1,8 @@
 /* vsprintf.c -- Lars Wirzenius & Linus Torvalds, optimized inline assembly version */
 
-#include <libc/stdarg.h>
-#include <libc/string.h>
-#include <libc/assert.h>
+#include <xjos/stdarg.h>
+#include <xjos/string.h>
+#include <xjos/assert.h>
 
 #define ZEROPAD 1   // Pad with zero
 #define SIGN 2      // Unsigned/signed long

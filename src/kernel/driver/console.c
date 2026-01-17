@@ -1,7 +1,7 @@
 #include <drivers/console.h>
 #include <hardware/io.h>
 #include <xjos/interrupt.h>
-#include <libc/string.h>
+#include <xjos/string.h>
 #include <drivers/device.h>
 
 static void get_screen();

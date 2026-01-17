@@ -1,5 +1,5 @@
 #include <xjos/printk.h>
-#include <libc/stdio.h>
+#include <xjos/stdio.h>
 #include <drivers/console.h>
 
 extern int32 console_write();

@@ -1,7 +1,7 @@
 #include <xjos/debug.h>
-#include <libc/stdarg.h>
+#include <xjos/stdarg.h>
 #include <xjos/printk.h>
-#include <libc/stdio.h>
+#include <xjos/stdio.h>
 #include <drivers/device.h>
 
 

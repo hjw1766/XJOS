@@ -1,6 +1,6 @@
 #include <hardware/io.h>
 #include <xjos/interrupt.h>
-#include <libc/assert.h>
+#include <xjos/assert.h>
 #include <xjos/debug.h>
 #include <xjos/task.h>
 #include <xjos/sched.h>

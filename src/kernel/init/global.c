@@ -1,5 +1,5 @@
 #include <xjos/global.h>
-#include <libc/string.h>
+#include <xjos/string.h>
 #include <xjos/debug.h>
 
 

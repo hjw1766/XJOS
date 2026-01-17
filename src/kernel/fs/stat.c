@@ -2,7 +2,7 @@
 #include <fs/stat.h>
 #include <xjos/task.h>
 #include <xjos/debug.h>
-#include <libc/assert.h>
+#include <xjos/assert.h>
 
 
 static void copy_stat(inode_t *inode, stat_t *statbuf) {

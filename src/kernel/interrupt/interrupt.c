@@ -4,7 +4,7 @@
 #include <xjos/printk.h>
 #include <xjos/stdlib.h>
 #include <hardware/io.h>
-#include <libc/assert.h>
+#include <xjos/assert.h>
 
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)

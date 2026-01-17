@@ -2,8 +2,8 @@
 #include <fs/buffer.h>
 #include <xjos/debug.h>
 #include <xjos/bitmap.h>
-#include <libc/assert.h>
-#include <libc/string.h>
+#include <xjos/assert.h>
+#include <xjos/string.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 

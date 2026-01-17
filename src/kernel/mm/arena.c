@@ -1,8 +1,8 @@
 #include <xjos/arena.h>
 #include <xjos/memory.h>
-#include <libc/string.h>
+#include <xjos/string.h>
 #include <xjos/stdlib.h>
-#include <libc/assert.h>
+#include <xjos/assert.h>
 
 
 extern u32 free_pages;

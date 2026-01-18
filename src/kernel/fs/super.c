@@ -2,7 +2,6 @@
 #include <fs/buffer.h>
 #include <drivers/device.h>
 #include <fs/stat.h>
-#include <xjos/syscall.h>
 #include <xjos/task.h>
 #include <xjos/assert.h>
 #include <xjos/string.h>

@@ -1,6 +1,5 @@
 #include <fs/fs.h>
 #include <fs/stat.h>
-#include <xjos/syscall.h>
 #include <xjos/assert.h>
 #include <xjos/debug.h>
 #include <fs/buffer.h>
@@ -9,6 +8,8 @@
 #include <xjos/task.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
+
+extern time_t sys_time();
 
 
 #define INODE_NR 64
@@ -95,7 +96,7 @@ inode_t *iget(dev_t dev, idx_t nr) {
     inode_t *inode = find_inode(dev, nr);
     if (inode) {
         inode->count++;
-        inode->atime = time();
+        inode->atime = sys_time();
 
         return fit_inode(inode);
     }
@@ -123,7 +124,7 @@ inode_t *iget(dev_t dev, idx_t nr) {
     inode->desc = &((inode_desc_t *)buf->data)[(inode->nr - 1) % BLOCK_INODES];
 
     inode->ctime = inode->desc->mtime;
-    inode->atime = time();
+    inode->atime = sys_time();
 
     return inode;
 }
@@ -142,7 +143,7 @@ inode_t *new_inode(dev_t dev, idx_t nr) {
     inode->desc->uid = task->uid;
     inode->desc->gid = task->gid;
     inode->desc->size = 0;
-    inode->desc->mtime = time();
+    inode->desc->mtime = sys_time();
     inode->desc->nlinks = 1;
     // clear zones
     memset(inode->desc->zones, 0, sizeof(inode->desc->zones));
@@ -222,7 +223,7 @@ int inode_read(inode_t *inode, char *buf, u32 len, off_t offset) {
         brelse(bf);
     }
 
-    inode->atime = time();  // update access time
+    inode->atime = sys_time();  // update access time
     return offset - begin;  // 实际读取字节数
 }
 
@@ -261,7 +262,7 @@ int inode_write(inode_t *inode, char *buf, u32 len, off_t offset) {
         brelse(bf);
     }
 
-    inode->desc->mtime = inode->atime = time(); // update modify & access time
+    inode->desc->mtime = inode->atime = sys_time(); // update modify & access time
 
     // bwrite(inode->buf);
 
@@ -329,7 +330,7 @@ void inode_truncate(inode_t *inode)
     // 5. 更新元数据
     inode->desc->size = 0;      // 文件大小变 0
     bdirty(inode->buf, true);   // 标记 inode 脏，等待写回
-    inode->desc->mtime = time();// 更新修改时间
+    inode->desc->mtime = sys_time();// 更新修改时间
     
     // 6. 强制写回磁盘（持久化修改）-> 延迟写回
     // bwrite(inode->buf);

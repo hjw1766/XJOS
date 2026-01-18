@@ -3,7 +3,6 @@
 #include <xjos/assert.h>
 #include <xjos/task.h>
 #include <drivers/device.h>
-#include <xjos/syscall.h>
 #include <fs/stat.h>
 
 

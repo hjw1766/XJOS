@@ -170,6 +170,7 @@ pid_t task_waitpid(pid_t pid, int32 *status);
 
 pid_t sys_getpid();
 pid_t sys_getppid();
+void task_prepare_user_mode();
 void task_to_user_mode(target_t target);
 
 fd_t task_get_fd(task_t *task);

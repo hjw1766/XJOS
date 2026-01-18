@@ -1,10 +1,6 @@
 #include <xjos/interrupt.h>
-#include <xjos/syscall.h>
 #include <xjos/debug.h>
-#include <xjos/mutex.h>
-#include <xjos/spinlock.h>
-#include <xjos/stdio.h>
-#include <xjos/arena.h>
+#include <xjos/task.h>
 #include <fs/buffer.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
@@ -26,35 +22,28 @@ void idle_thread() {
     }
 }
 
-extern int osh_main();
-
-static void user_init_thread() {
-
-    while (true) {
-        u32 status;
-        pid_t pid = fork();
-        if (pid) {
-            pid_t child = waitpid(pid, &status);
-            printf("wait pid %d status %d %d\n", child, status, time());
-        } else {
-            osh_main();
-        }
-    }
-}
+extern int sys_execve(char *filename, char *argv[], char *envp[]);
 
 extern void dev_init();
 
 void init_thread() {
-    char temp[100];
     dev_init();
-    task_to_user_mode(user_init_thread);    
-} 
+
+    // Enter user mode and run /bin/init (a tiny supervisor that respawns /bin/sh).
+    task_prepare_user_mode();
+    char *argv[] = {"init", NULL};
+    char *envp[] = {"HOME=/", "PATH=/bin", NULL};
+    sys_execve("/bin/init", argv, envp);
+    panic("init: failed to exec /bin/init");
+}  
 
 
 void test_thread() {
     set_interrupt_state(true);
     while (true) {
-        sleep(1000);
+        bool intr = interrupt_disable();
+        task_sleep(1000);
+        set_interrupt_state(intr);
     }
 }
 
@@ -62,7 +51,9 @@ void test_thread() {
 void sync_thread() {
     set_interrupt_state(true);
     while (true) {
-        sync();
-        sleep(5000); // every 5 seconds
+        bsync();
+        bool intr = interrupt_disable();
+        task_sleep(5000); // every 5 seconds
+        set_interrupt_state(intr);
     }
 }

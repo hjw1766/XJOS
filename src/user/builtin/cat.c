@@ -3,7 +3,7 @@
 #include <xjos/stdio.h>
 #include <xjos/syscall.h>
 #include <xjos/string.h>
-#include <fs/fs.h>
+#include <xjos/fcntl.h>
 #else
 #include <stdio.h>
 #include <string.h>
@@ -13,9 +13,10 @@
 
 #define BUFLEN 1024
 
-char buf[BUFLEN];
+static char buf[BUFLEN];
 
-int main(int argc, char const *argv[]) {
+int cmd_cat(int argc, char **argv, char **envp) {
+    (void)envp;
     if (argc < 2) {
         return EOF;
     }
@@ -36,3 +37,9 @@ int main(int argc, char const *argv[]) {
     close(fd);
     return 0;
 }
+
+#ifndef XJOS_BUSYBOX_APPLET
+int main(int argc, char const *argv[], char const *envp[]) {
+    return cmd_cat(argc, (char **)argv, (char **)envp);
+}
+#endif

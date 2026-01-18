@@ -9,7 +9,7 @@
 #endif
 
 
-int main(int argc, char const *argv[], char const *envp[]) {
+int cmd_env(int argc, char **argv, char **envp) {
     for (size_t i = 0; i < argc; i++)
     {
         printf("%s\n", argv[i]);
@@ -26,3 +26,9 @@ int main(int argc, char const *argv[], char const *envp[]) {
     }
     return 0;
 }
+
+#ifndef XJOS_BUSYBOX_APPLET
+int main(int argc, char const *argv[], char const *envp[]) {
+    return cmd_env(argc, (char **)argv, (char **)envp);
+}
+#endif

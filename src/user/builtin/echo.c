@@ -8,9 +8,10 @@
 #include <string.h>
 #endif
 
-int main(int argc, char const *argv[]) {
+int cmd_echo(int argc, char **argv, char **envp) {
+    (void)envp;
     for (size_t i = 1; i < argc; i++) {
-        printf(argv[i]);
+        printf("%s", argv[i]);
         if (i < argc - 1) {
             printf(" ");
         }
@@ -18,3 +19,9 @@ int main(int argc, char const *argv[]) {
     printf("\n");
     return 0;
 }
+
+#ifndef XJOS_BUSYBOX_APPLET
+int main(int argc, char const *argv[], char const *envp[]) {
+    return cmd_echo(argc, (char **)argv, (char **)envp);
+}
+#endif

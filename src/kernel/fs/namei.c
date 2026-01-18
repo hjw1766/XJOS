@@ -1,7 +1,6 @@
 #include <fs/fs.h>
 #include <fs/buffer.h>
 #include <fs/stat.h>
-#include <xjos/syscall.h>
 #include <xjos/string.h>
 #include <xjos/task.h>
 #include <xjos/assert.h>
@@ -9,6 +8,8 @@
 
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
+
+extern time_t sys_time();
 
 
 bool permission(inode_t *inode, u16 mask) {
@@ -355,7 +356,7 @@ buffer_t *add_entry(inode_t *dir, const char *name, dentry_t **result) {
             memset(entry->name, 0, NAME_LEN); 
             strlcpy(entry->name, name, NAME_LEN);
             
-            dir->desc->mtime = time(); // 更新目录修改时间
+            dir->desc->mtime = sys_time(); // 更新目录修改时间
             bdirty(dir->buf, true); // 标记目录 inode 脏
             
             bdirty(buf, true); // 标记目录块为脏
@@ -719,7 +720,7 @@ int sys_rmdir(char *pathname) {
 
     // update parent
     dir->desc->nlinks--; // remove '..' count
-    dir->ctime = dir->atime = dir->desc->mtime = time();
+    dir->ctime = dir->atime = dir->desc->mtime = sys_time();
     bdirty(dir->buf, true);
     assert(dir->desc->nlinks > 0);
 
@@ -775,7 +776,7 @@ int sys_link(char *oldname, char *newname) {
     bdirty(buf, true);
 
     inode->desc->nlinks++;      // increase link count
-    inode->ctime = time();
+    inode->ctime = sys_time();
     bdirty(inode->buf, true);
     ret = 0;
 
@@ -826,7 +827,7 @@ int sys_unlink(char *filename) {
     bdirty(ebuf, true);
 
     inode->desc->nlinks--;
-    inode->ctime = time();
+    inode->ctime = sys_time();
     bdirty(inode->buf, true);
 
     // if link count == 0, free inode
@@ -916,7 +917,7 @@ makeup:
     if (ISDIR(inode->desc->mode) && (flag & O_ACCMODE) != O_RDONLY)
         goto rollback; // open dir in read-only mode
     
-    inode->atime = time();
+    inode->atime = sys_time();
 
     if (flag & O_TRUNC)
         inode_truncate(inode);

@@ -1,5 +1,4 @@
 #include <xjos/types.h>
-#include <xjos/syscall.h>
 #include <fs/fs.h>
 #include <xjos/memory.h>
 #include <xjos/stdlib.h>

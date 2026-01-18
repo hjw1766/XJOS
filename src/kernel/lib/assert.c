@@ -2,7 +2,7 @@
 #include <xjos/printk.h>
 #include <xjos/stdio.h>
 #include <xjos/types.h>
-#include <xjos/syscall.h>
+#include <fs/buffer.h>
 
 
 
@@ -39,7 +39,7 @@ void panic(const char *fmt, ...) {
     va_end(ars);
 
     printk("!!! panic !!!\n---->%s \n", buf);
-    sync();
+    bsync();
     spin("panic()");
 
     asm volatile("ud2");

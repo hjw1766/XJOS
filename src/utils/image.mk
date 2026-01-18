@@ -1,3 +1,5 @@
+BUSYBOX_APPLETS ?= ls cat echo env sh
+
 $(BUILD_DIR)/master.img: $(BUILD_DIR)/boot/boot.bin \
 	$(BUILD_DIR)/boot/loader.bin \
 	$(BUILD_DIR)/system.bin \
@@ -44,6 +46,17 @@ $(BUILD_DIR)/master.img: $(BUILD_DIR)/boot/boot.bin \
 	for app in $(BUILTIN_APPS); \
 	do \
 		cp $$app /mnt/bin; \
+	done
+
+	# init convenience name
+	if [ -f /mnt/bin/init.out ]; then ln -f /mnt/bin/init.out /mnt/bin/init; fi
+
+# busybox-style applets (hardlinks)
+	ln -f /mnt/bin/busybox.out /mnt/bin/busybox
+	for app in $(BUSYBOX_APPLETS); \
+	do \
+		ln -f /mnt/bin/busybox.out /mnt/bin/$$app; \
+		ln -f /mnt/bin/busybox.out /mnt/bin/$$app.out; \
 	done
 
 # file

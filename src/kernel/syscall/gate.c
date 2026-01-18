@@ -1,7 +1,7 @@
 #include <xjos/interrupt.h>
 #include <xjos/assert.h>
 #include <xjos/debug.h>
-#include <xjos/syscall.h>
+#include <xjos/syscall_nr.h>
 #include <xjos/task.h>
 #include <xjos/memory.h>
 #include <drivers/device.h>

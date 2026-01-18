@@ -4,8 +4,8 @@
 #include <xjos/stdio.h>
 #include <xjos/assert.h>
 #include <xjos/time.h>
-#include <fs/fs.h>
-#include <xjos/memory.h>
+#include <xjos/fcntl.h>
+#include <fs/stat.h>
 
 
 #define MAX_CMD_LEN 256
@@ -18,7 +18,6 @@ static char cmd[MAX_CMD_LEN];
 static char *args[MAX_ARG_NR];
 static char buf[BUFLEN];
 
-
 typedef void (*cmd_handler_t)(int argc, char *argv[]);
 
 typedef struct {
@@ -29,11 +28,13 @@ typedef struct {
 
 static const cmd_t cmd_table[];
 
-static char *envp[] = {
+static char *default_envp[] = {
     "HOME=/",
     "PATH=/bin",
     NULL
 };
+
+static char **current_envp = default_envp;
 
 static const char *logo[] = {
         "__  __   _  _____ ____ ",
@@ -46,7 +47,6 @@ static const char *logo[] = {
 // ---------- helper function ----------
 
 static const char *basename(const char *path) {
-
     const char *ptr = strrchr(path, '/');
     if (!ptr) return path;
     return ptr + 1;
@@ -66,10 +66,10 @@ static void spawn_process(char *filename, char *argv[]) {
     pid_t pid = fork();
 
     if (pid) {
-        pid_t child = waitpid(pid, &status);
+        (void)waitpid(pid, &status);
     } else {
-        int i = execve(filename, argv, envp);
-        printf("osh: command not found or execution failed: %s\n", filename);
+        int i = execve(filename, argv, current_envp);
+        printf("sh: command not found or execution failed: %s\n", filename);
         exit(i);    // hlt if execve failed
     }
 }
@@ -86,45 +86,19 @@ static void strftime(time_t stamp, char *buf) {
             time.tm_sec);
 }
 
-static void parsemode(int mode, char *buf) {
-    memset(buf, '-', 10);
-    buf[10] = '\0';
-    char *ptr = buf;
-
-    switch (mode & IFMT) {
-        case IFREG: *ptr = '-'; break;
-        case IFBLK: *ptr = 'b'; break;
-        case IFDIR: *ptr = 'd'; break;
-        case IFCHR: *ptr = 'c'; break;
-        case IFIFO: *ptr = 'p'; break;
-        case IFLNK: *ptr = 'l'; break;
-        case IFSOCK: *ptr = 's'; break;
-        default: *ptr = '?'; break;
-    }
-    ptr++;
-
-    for (int i = 6; i >= 0; i -= 3) {
-        int fmt = (mode >> i) & 0x7;
-        *ptr++ = (fmt & 0b100) ? 'r' : '-';
-        *ptr++ = (fmt & 0b010) ? 'w' : '-';
-        *ptr++ = (fmt & 0b001) ? 'x' : '-';
-    }
-}
-
 // -------- builtin functions --------
 
-void builtin_logo(int argc, char *argv[]) {
+static void builtin_logo(int argc, char *argv[]) {
+    (void)argc;
+    (void)argv;
     clear();
 
-    int terminal_width = 80; 
-    int logo_width = 23;     
+    int terminal_width = 80;
+    int logo_width = 23;
     int padding = (terminal_width - logo_width) / 2;
 
-
-    for (int i = 0; i < 5; i++)
-    {
-        for (int j = 0; j < padding; j++)
-        {
+    for (int i = 0; i < 5; i++) {
+        for (int j = 0; j < padding; j++) {
             printf(" ");
         }
         printf("%s\n", logo[i]);
@@ -133,14 +107,18 @@ void builtin_logo(int argc, char *argv[]) {
     printf("\n");
 }
 
-void builtin_test(int argc, char *argv[]) { 
+static void builtin_test(int argc, char *argv[]) {
+    (void)argc;
+    (void)argv;
     printf("Running system test...\n");
 }
 
-void builtin_pwd(int argc, char *argv[]) { getcwd(cwd, MAX_PATH_LEN); printf("%s\n", cwd); }
-void builtin_clear(int argc, char *argv[]) { clear(); }
+static void builtin_pwd(int argc, char *argv[]) { (void)argc; (void)argv; getcwd(cwd, MAX_PATH_LEN); printf("%s\n", cwd); }
+static void builtin_clear(int argc, char *argv[]) { (void)argc; (void)argv; clear(); }
 
-void builtin_help(int argc, char *argv[]) {
+static void builtin_help(int argc, char *argv[]) {
+    (void)argc;
+    (void)argv;
     printf("Available commands:\n");
     const cmd_t *ptr = cmd_table;
     while (ptr->name) {
@@ -149,12 +127,14 @@ void builtin_help(int argc, char *argv[]) {
     }
 }
 
-void builtin_date(int argc, char *argv[]) {
+static void builtin_date(int argc, char *argv[]) {
+    (void)argc;
+    (void)argv;
     strftime(time(), buf);
     printf("System time: %s\n", buf);
 }
 
-void builtin_mount(int argc, char *argv[]) {
+static void builtin_mount(int argc, char *argv[]) {
     if (argc < 3) {
         printf("mount: missing operand\n");
         printf("Usage: mount <source> <target>\n");
@@ -163,7 +143,7 @@ void builtin_mount(int argc, char *argv[]) {
     mount(argv[1], argv[2], 0);
 }
 
-void builtin_umount(int argc, char *argv[]) {
+static void builtin_umount(int argc, char *argv[]) {
     if (argc < 2) {
         printf("umount: missing operand\n");
         printf("Usage: umount <target>\n");
@@ -172,7 +152,7 @@ void builtin_umount(int argc, char *argv[]) {
     umount(argv[1]);
 }
 
-void builtin_mkfs(int argc, char *argv[]) {
+static void builtin_mkfs(int argc, char *argv[]) {
     if (argc < 2) {
         printf("mkfs: missing operand\n");
         printf("Usage: mkfs <device>\n");
@@ -181,13 +161,13 @@ void builtin_mkfs(int argc, char *argv[]) {
     mkfs(argv[1], 0);
 }
 
-void builtin_mkdir(int argc, char *argv[]) {
+static void builtin_mkdir(int argc, char *argv[]) {
     if (argc < 2) {
         printf("mkdir: missing operand\n");
         printf("Usage: mkdir <directory>\n");
         return;
     }
-    
+
     if (mkdir(argv[1], 0755) == EOF) {
         printf("mkdir: cannot create directory '%s': ", argv[1]);
         // exists check
@@ -201,13 +181,13 @@ void builtin_mkdir(int argc, char *argv[]) {
     }
 }
 
-void builtin_rmdir(int argc, char *argv[]) {
+static void builtin_rmdir(int argc, char *argv[]) {
     if (argc < 2) {
         printf("rmdir: missing operand\n");
         printf("Usage: rmdir <directory>\n");
         return;
     }
-    
+
     if (rmdir(argv[1]) == EOF) {
         printf("rmdir: failed to remove '%s': ", argv[1]);
         fd_t fd = open(argv[1], O_RDONLY, 0);
@@ -220,13 +200,13 @@ void builtin_rmdir(int argc, char *argv[]) {
     }
 }
 
-void builtin_rm(int argc, char *argv[]) {
+static void builtin_rm(int argc, char *argv[]) {
     if (argc < 2) {
         printf("rm: missing operand\n");
         printf("Usage: rm <file>\n");
         return;
     }
-    
+
     if (unlink(argv[1]) == EOF) {
         printf("rm: cannot remove '%s': ", argv[1]);
         fd_t fd = open(argv[1], O_RDONLY, 0);
@@ -239,7 +219,7 @@ void builtin_rm(int argc, char *argv[]) {
     }
 }
 
-void builtin_cd(int argc, char *argv[]) { 
+static void builtin_cd(int argc, char *argv[]) {
     if (argc < 2) return;   // todo cd ~
 
     if (chdir(argv[1]) == EOF) {
@@ -247,23 +227,10 @@ void builtin_cd(int argc, char *argv[]) {
     }
 }
 
-void builtin_exit(int argc, char *argv[]) {
+static void builtin_exit(int argc, char *argv[]) {
     int code = 0;
     if (argc == 2) code = atoi(argv[1]); // string to int
     exit(code);
-}
-
-void builtin_exec(char *filename, int argc, char *argv[]) {
-    int status;
-    pid_t pid = fork();
-
-    if (pid) {
-        pid_t child = waitpid(pid, &status);
-        return;
-    } else {
-        int i = execve(filename, argv, envp);
-        exit(i);    // hlt if execve failed
-    }
 }
 
 // -------- command table --------
@@ -302,14 +269,13 @@ static void execute(int argc, char *argv[]) {
 
     stat_t statbuf;
 
-
     // /bin/xx or ./a.out
     if (strchr(cmd_name, '/')) {
         if (stat(cmd_name, &statbuf) != EOF) {
             spawn_process(cmd_name, argv);
             return;
         } else {
-            printf("osh: no such file or directory: %s\n", cmd_name);
+            printf("sh: no such file or directory: %s\n", cmd_name);
         }
 
         return;
@@ -328,17 +294,15 @@ static void execute(int argc, char *argv[]) {
         return;
     }
 
-    // todo: outer command
-
     // not found
-    printf("osh: command not found: %s\n", cmd_name);
+    printf("sh: command not found: %s\n", cmd_name);
 }
 
-void readline(char *buf, int count) {
+static void readline(char *buf, int count) {
     char *ptr = buf;
     u32 idx = 0;
 
-    while (idx < count - 1) {
+    while (idx < (u32)(count - 1)) {
         if (read(STDIN_FILENO, ptr + idx, 1) == -1) break;
 
         char ch = ptr[idx];
@@ -347,10 +311,10 @@ void readline(char *buf, int count) {
             ptr[idx] = '\0';
             write(STDOUT_FILENO, "\n", 1);
             return;
-        } else if ( ch == '\b' || ch == 0x7F) {
+        } else if (ch == '\b' || ch == 0x7F) {
             if (idx > 0) {
                 idx--;
-                write(STDOUT_FILENO, "\b \b", 3);  // left, printf ' ', left  
+                write(STDOUT_FILENO, "\b \b", 3);  // left, printf ' ', left
             }
         } else if (ch == '\t') {
             continue;
@@ -359,7 +323,7 @@ void readline(char *buf, int count) {
             idx++;
         }
     }
-    buf[idx] = '\0';    // cos count - 1
+    buf[idx] = '\0';
 }
 
 static int cmd_parse(char *cmd, char *argv[], char token) {
@@ -381,13 +345,17 @@ static int cmd_parse(char *cmd, char *argv[], char token) {
         }
     }
 
-    argv[argc] = NULL;   // end flag
+    argv[argc] = NULL;
     return argc;
 }
 
-int osh_main() {
+int cmd_sh(int argc, char **argv, char **envp) {
+    (void)argc;
+    (void)argv;
+
+    current_envp = envp ? envp : default_envp;
+
     memset(cmd, 0, sizeof(cmd));
-    
     getcwd(cwd, MAX_PATH_LEN);
 
     builtin_logo(0, NULL);
@@ -396,13 +364,19 @@ int osh_main() {
         print_prompt();
         readline(cmd, sizeof(cmd));
 
-        if (cmd[0] == 0) continue;  // empty command '\n'
-        
-        int argc = cmd_parse(cmd, args, ' ');
-        if (argc > 0) {
-            execute(argc, args);
+        if (cmd[0] == 0) continue;
+
+        int cargc = cmd_parse(cmd, args, ' ');
+        if (cargc > 0) {
+            execute(cargc, args);
         }
     }
 
     return 0;
 }
+
+#ifndef XJOS_BUSYBOX_APPLET
+int main(int argc, char **argv, char **envp) {
+    return cmd_sh(argc, argv, envp);
+}
+#endif

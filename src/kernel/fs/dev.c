@@ -1,5 +1,4 @@
 #include <drivers/device.h>
-#include <xjos/syscall.h>
 #include <fs/stat.h>
 #include <xjos/stdio.h>
 #include <xjos/assert.h>
@@ -7,8 +6,12 @@
 
 extern file_t file_table[];
 
+extern int sys_mkdir(char *pathname, mode_t mode);
+extern int sys_mknod(char *pathname, int mode, int dev);
+extern int sys_link(char *oldname, char *newname);
+
 void dev_init() {
-    mkdir("/dev", 0755);
+    sys_mkdir("/dev", 0755);
 
     device_t *device = NULL;
 
@@ -23,10 +26,10 @@ void dev_init() {
     sb->imount->mount = device->dev;
 
     device = device_find(DEV_CONSOLE, 0);
-    mknod("/dev/console", IFCHR | 0600, device->dev);
+    sys_mknod("/dev/console", IFCHR | 0600, device->dev);
 
     device = device_find(DEV_KEYBOARD, 0);
-    mknod("/dev/keyboard", IFCHR | 0400, device->dev);
+    sys_mknod("/dev/keyboard", IFCHR | 0400, device->dev);
 
     char name[32];
 
@@ -35,7 +38,7 @@ void dev_init() {
         if (!device)
             break;
         sprintf(name, "/dev/%s", device->name);
-        mknod(name, IFBLK | 0600, device->dev);
+        sys_mknod(name, IFBLK | 0600, device->dev);
     }
 
     for (size_t i = 0; true; i++) {
@@ -43,7 +46,7 @@ void dev_init() {
         if (!device)
             break;
         sprintf(name, "/dev/%s", device->name);
-        mknod(name, IFBLK | 0600, device->dev);
+        sys_mknod(name, IFBLK | 0600, device->dev);
     }
 
     // serial devices
@@ -52,7 +55,7 @@ void dev_init() {
         if (!device)
             break;
         sprintf(name, "/dev/%s", device->name);
-        mknod(name, IFCHR | 0600, device->dev);
+        sys_mknod(name, IFCHR | 0600, device->dev);
     }
 
     // RAMDISK devices
@@ -61,12 +64,12 @@ void dev_init() {
         if (!device)
             break;
         sprintf(name, "/dev/%s", device->name);
-        mknod(name, IFBLK | 0600, device->dev);
+        sys_mknod(name, IFBLK | 0600, device->dev);
     }
 
-    link("/dev/console", "/dev/stdout");
-    link("/dev/console", "/dev/stderr");
-    link("/dev/keyboard", "/dev/stdin");
+    sys_link("/dev/console", "/dev/stdout");
+    sys_link("/dev/console", "/dev/stderr");
+    sys_link("/dev/keyboard", "/dev/stdin");
 
     file_t *file;
     inode_t *inode;

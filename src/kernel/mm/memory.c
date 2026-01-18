@@ -6,11 +6,14 @@
 #include <xjos/string.h>
 #include <xjos/bitmap.h>
 #include <xjos/task.h>
-#include <xjos/syscall.h>
+#include <xjos/syscall_nr.h>
 #include <fs/fs.h>
 
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
+
+extern int sys_read(fd_t fd, char *buf, int len);
+extern int sys_lseek(fd_t fd, int offset, int whence);
 
 
 #define ZONE_VALID 1    // ards Valid zone
@@ -588,8 +591,8 @@ void *sys_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t off
     }
 
     if (fd != EOF) {
-        lseek(fd, offset, SEEK_SET);
-        read(fd, (void *)vaddr, length);    // todo
+        sys_lseek(fd, offset, SEEK_SET);
+        sys_read(fd, (void *)vaddr, length);    // todo
     }
 
     return (void *)vaddr;

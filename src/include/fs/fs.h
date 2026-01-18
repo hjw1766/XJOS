@@ -3,6 +3,7 @@
 
 #include <xjos/types.h>
 #include <xjos/list.h>
+#include <fs/stat.h>
 
 #define MAX_PATH_LEN 1024
 #define BLOCK_SIZE 1024 // block size in bytes

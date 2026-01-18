@@ -7,7 +7,6 @@
 #include <xjos/interrupt.h>
 #include <xjos/string.h>
 #include <xjos/bitmap.h>
-#include <xjos/syscall.h>
 #include <xjos/list.h>
 #include <xjos/global.h>
 #include <xjos/arena.h>
@@ -446,23 +445,32 @@ found:
 // 其他辅助
 // ----------------------------------------------------------------------------
 
+void task_prepare_user_mode() {
+    task_t *task = running_task();
+
+    task->nice = NICE_DEFAULT;
+    task->weight = sched_nice_to_weight(task->nice);
+
+    if (task->vmap == &kernel_map) {
+        // 为用户进程分配独立的内存位图
+        task->vmap = kmalloc(sizeof(bitmap_t));
+        void *buf = (void *)alloc_kpage(1);
+        bitmap_init(task->vmap, buf, USER_MMAP_SIZE / PAGE_SIZE / 8, USER_MMAP_ADDR / PAGE_SIZE);
+
+        // 复制页表并切换
+        task->pde = (u32)copy_pde();
+    }
+
+    set_cr3(task->pde);
+}
+
 void task_to_user_mode(target_t target) {
     task_t *task = running_task();
     
     // 重置内核栈顶
     // 注意：这里只是为了清理栈空间，真正切换靠 iret
-    
-    task->nice = NICE_DEFAULT;
-    task->weight = sched_nice_to_weight(task->nice);
 
-    // 为用户进程分配独立的内存位图
-    task->vmap = kmalloc(sizeof(bitmap_t));
-    void *buf = (void *)alloc_kpage(1);
-    bitmap_init(task->vmap, buf, USER_MMAP_SIZE / PAGE_SIZE / 8, USER_MMAP_ADDR / PAGE_SIZE);
-
-    // 复制页表并切换
-    task->pde = (u32)copy_pde();
-    set_cr3(task->pde);
+    task_prepare_user_mode();
 
     // 构造 Ring3 中断帧
     u32 stack_top = (u32)task + PAGE_SIZE;

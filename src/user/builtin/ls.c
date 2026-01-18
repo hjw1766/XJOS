@@ -2,8 +2,10 @@
 #include <xjos/stdio.h>
 #include <xjos/syscall.h>
 #include <xjos/string.h>
-#include <fs/fs.h>
 #include <xjos/time.h>
+#include <xjos/fcntl.h>
+#include <xjos/dirent.h>
+#include <fs/stat.h>
 
 
 #define BUF_LEN 1024
@@ -92,7 +94,8 @@ void reckon_size(int *size, char *qualifer) {
     }
 }
 
-int main(int argc, char const *argv[], char const *envp[]) {
+int cmd_ls(int argc, char **argv, char **envp) {
+    (void)envp;
     fd_t fd = open(".", O_RDONLY, 0);
     if (fd == EOF)
         return EOF;
@@ -147,3 +150,9 @@ int main(int argc, char const *argv[], char const *envp[]) {
     close(fd);
     return 0;
 }
+
+#ifndef XJOS_BUSYBOX_APPLET
+int main(int argc, char const *argv[], char const *envp[]) {
+    return cmd_ls(argc, (char **)argv, (char **)envp);
+}
+#endif

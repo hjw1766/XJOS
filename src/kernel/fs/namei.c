@@ -286,7 +286,7 @@ static buffer_t *find_entry(inode_t **dir, const char *name, char **next, dentry
         if (entry->nr != 0) {
             int entry_len = minix_name_len(entry->name);
             // 只有当磁盘里的文件名长度匹配，才进行后续比较
-            if (match_name(name, entry->name, entry_len, next)) {
+            if (entry->nr && match_name(name, entry->name, entry_len, next)) {
                 *result = entry;
                 return buf; // 返回 buf，持有锁
             }

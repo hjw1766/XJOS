@@ -26,6 +26,15 @@ static const applet_t applets[] = {
     {"cat", cmd_cat},
     {"echo", cmd_echo},
     {"env", cmd_env},
+    {"pwd", cmd_pwd},
+    {"clear", cmd_clear},
+    {"date", cmd_date},
+    {"mkdir", cmd_mkdir},
+    {"rmdir", cmd_rmdir},
+    {"rm", cmd_rm},
+    {"mount", cmd_mount},
+    {"umount", cmd_umount},
+    {"mkfs", cmd_mkfs},
     {"sh", cmd_sh},
     {NULL, NULL},
 };
@@ -34,7 +43,7 @@ static void usage(void) {
     printf("usage:\n");
     printf("  busybox <applet> [args...]\n");
     printf("  <applet> [args...]   (via hardlink name)\n");
-    printf("applets: ls cat echo env sh\n");
+    printf("applets: ls cat echo env pwd clear date mkdir rmdir rm mount umount mkfs sh\n");
 }
 
 int main(int argc, char **argv, char **envp) {

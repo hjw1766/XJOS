@@ -3,7 +3,6 @@
 #include <xjos/stdlib.h>
 #include <xjos/stdio.h>
 #include <xjos/assert.h>
-#include <xjos/time.h>
 #include <xjos/fcntl.h>
 #include <fs/stat.h>
 
@@ -61,32 +60,172 @@ static void print_prompt() {
     printf("[root %s]# ", base);
 }
 
-static void spawn_process(char *filename, char *argv[]) {
+static void spawn_process(char *filename, char *argv[], fd_t infd, fd_t outfd, fd_t errfd);
+
+// -------- builtin functions --------
+static int dupfile(int argc, char *argv[], fd_t dupfd[3]) {
+    for (size_t i = 0; i < 3; i++) {
+        dupfd[i] = EOF;
+    }
+
+    int outappend = 0;
+    int errappend = 0;
+
+    char *infile = NULL;
+    char *outfile = NULL;
+    char *errfile = NULL;
+
+    for (int i = 0; i < argc; i++) {
+        if (!argv[i]) continue;
+
+        if (!strcmp(argv[i], "<") && (i + 1) < argc && argv[i + 1]) {
+            infile = argv[i + 1];
+            argv[i] = NULL;
+            i++;
+            continue;
+        }
+        if (!strcmp(argv[i], ">") && (i + 1) < argc && argv[i + 1]) {
+            outfile = argv[i + 1];
+            argv[i] = NULL;
+            outappend = 0;
+            i++;
+            continue;
+        }
+        if (!strcmp(argv[i], ">>") && (i + 1) < argc && argv[i + 1]) {
+            outfile = argv[i + 1];
+            argv[i] = NULL;
+            outappend = O_APPEND;
+            i++;
+            continue;
+        }
+        if (!strcmp(argv[i], "2>") && (i + 1) < argc && argv[i + 1]) {
+            errfile = argv[i + 1];
+            argv[i] = NULL;
+            errappend = 0;
+            i++;
+            continue;
+        }
+        if (!strcmp(argv[i], "2>>") && (i + 1) < argc && argv[i + 1]) {
+            errfile = argv[i + 1];
+            argv[i] = NULL;
+            errappend = O_APPEND;
+            i++;
+            continue;
+        }
+    }
+
+    if (infile != NULL) {
+        fd_t fd = open(infile, O_RDONLY, 0);
+        if (fd == EOF) {
+            printf("sh: open failed: %s\n", infile);
+            goto rollback;
+        }
+        dupfd[0] = fd;
+    }
+
+    if (outfile != NULL) {
+        int flags = O_WRONLY | O_CREAT | (outappend ? O_APPEND : O_TRUNC);
+        fd_t fd = open(outfile, flags, 0755);
+        if (fd == EOF) {
+            printf("sh: open failed: %s\n", outfile);
+            goto rollback;
+        }
+        dupfd[1] = fd;
+    }
+
+    if (errfile != NULL) {
+        int flags = O_WRONLY | O_CREAT | (errappend ? O_APPEND : O_TRUNC);
+        fd_t fd = open(errfile, flags, 0755);
+        if (fd == EOF) {
+            printf("sh: open failed: %s\n", errfile);
+            goto rollback;
+        }
+        dupfd[2] = fd;
+    }
+
+    return 0;
+
+rollback:
+    for (size_t i = 0; i < 3; i++) {
+        if (dupfd[i] != EOF) {
+            close(dupfd[i]);
+            dupfd[i] = EOF;
+        }
+    }
+    return -1;
+}
+
+static int apply_redirect_fds(fd_t dupfd[3], fd_t saved[3]) {
+    for (size_t i = 0; i < 3; i++) {
+        saved[i] = EOF;
+    }
+
+    for (fd_t i = 0; i < 3; i++) {
+        if (dupfd[i] == EOF) continue;
+
+        saved[i] = dup(i);
+        if (saved[i] == EOF) {
+            printf("sh: dup failed\n");
+            return -1;
+        }
+        if (dup2(dupfd[i], i) == EOF) {
+            printf("sh: dup2 failed\n");
+            return -1;
+        }
+        close(dupfd[i]);
+        dupfd[i] = EOF;
+    }
+    return 0;
+}
+
+static void restore_redirect_fds(fd_t saved[3]) {
+    for (fd_t i = 0; i < 3; i++) {
+        if (saved[i] == EOF) continue;
+        (void)dup2(saved[i], i);
+        close(saved[i]);
+        saved[i] = EOF;
+    }
+}
+
+static void close_redirect_fds(fd_t dupfd[3]) {
+    for (size_t i = 0; i < 3; i++) {
+        if (dupfd[i] != EOF) {
+            close(dupfd[i]);
+            dupfd[i] = EOF;
+        }
+    }
+}
+
+static void spawn_process(char *filename, char *argv[], fd_t infd, fd_t outfd, fd_t errfd) {
     int status;
     pid_t pid = fork();
 
     if (pid) {
+        if (infd != EOF) close(infd);
+        if (outfd != EOF) close(outfd);
+        if (errfd != EOF) close(errfd);
         (void)waitpid(pid, &status);
-    } else {
-        int i = execve(filename, argv, current_envp);
-        printf("sh: command not found or execution failed: %s\n", filename);
-        exit(i);    // hlt if execve failed
+        return;
     }
+
+    if (infd != EOF) {
+        (void)dup2(infd, STDIN_FILENO);
+        close(infd);
+    }
+    if (outfd != EOF) {
+        (void)dup2(outfd, STDOUT_FILENO);
+        close(outfd);
+    }
+    if (errfd != EOF) {
+        (void)dup2(errfd, STDERR_FILENO);
+        close(errfd);
+    }
+
+    int i = execve(filename, argv, current_envp);
+    printf("sh: command not found or execution failed: %s\n", filename);
+    exit(i);    // hlt if execve failed
 }
 
-static void strftime(time_t stamp, char *buf) {
-    tm time;
-    localtime(stamp, &time);
-    sprintf(buf, "%04d-%02d-%02d %02d:%02d:%02d",
-            time.tm_year + 1900,
-            time.tm_mon,
-            time.tm_mday,
-            time.tm_hour,
-            time.tm_min,
-            time.tm_sec);
-}
-
-// -------- builtin functions --------
 
 static void builtin_logo(int argc, char *argv[]) {
     (void)argc;
@@ -113,9 +252,6 @@ static void builtin_test(int argc, char *argv[]) {
     printf("Running system test...\n");
 }
 
-static void builtin_pwd(int argc, char *argv[]) { (void)argc; (void)argv; getcwd(cwd, MAX_PATH_LEN); printf("%s\n", cwd); }
-static void builtin_clear(int argc, char *argv[]) { (void)argc; (void)argv; clear(); }
-
 static void builtin_help(int argc, char *argv[]) {
     (void)argc;
     (void)argv;
@@ -127,97 +263,6 @@ static void builtin_help(int argc, char *argv[]) {
     }
 }
 
-static void builtin_date(int argc, char *argv[]) {
-    (void)argc;
-    (void)argv;
-    strftime(time(), buf);
-    printf("System time: %s\n", buf);
-}
-
-static void builtin_mount(int argc, char *argv[]) {
-    if (argc < 3) {
-        printf("mount: missing operand\n");
-        printf("Usage: mount <source> <target>\n");
-        return;
-    }
-    mount(argv[1], argv[2], 0);
-}
-
-static void builtin_umount(int argc, char *argv[]) {
-    if (argc < 2) {
-        printf("umount: missing operand\n");
-        printf("Usage: umount <target>\n");
-        return;
-    }
-    umount(argv[1]);
-}
-
-static void builtin_mkfs(int argc, char *argv[]) {
-    if (argc < 2) {
-        printf("mkfs: missing operand\n");
-        printf("Usage: mkfs <device>\n");
-        return;
-    }
-    mkfs(argv[1], 0);
-}
-
-static void builtin_mkdir(int argc, char *argv[]) {
-    if (argc < 2) {
-        printf("mkdir: missing operand\n");
-        printf("Usage: mkdir <directory>\n");
-        return;
-    }
-
-    if (mkdir(argv[1], 0755) == EOF) {
-        printf("mkdir: cannot create directory '%s': ", argv[1]);
-        // exists check
-        stat_t statbuf;
-        if (stat(argv[1], &statbuf) == 0) {
-            printf("Directory exists\n");
-            return;
-        }
-
-        printf("Permission denied or parent directory does not exist\n");
-    }
-}
-
-static void builtin_rmdir(int argc, char *argv[]) {
-    if (argc < 2) {
-        printf("rmdir: missing operand\n");
-        printf("Usage: rmdir <directory>\n");
-        return;
-    }
-
-    if (rmdir(argv[1]) == EOF) {
-        printf("rmdir: failed to remove '%s': ", argv[1]);
-        fd_t fd = open(argv[1], O_RDONLY, 0);
-        if (fd == EOF) {
-            printf("No such file or directory\n");
-        } else {
-            close(fd);
-            printf("Directory not empty or not a directory\n");
-        }
-    }
-}
-
-static void builtin_rm(int argc, char *argv[]) {
-    if (argc < 2) {
-        printf("rm: missing operand\n");
-        printf("Usage: rm <file>\n");
-        return;
-    }
-
-    if (unlink(argv[1]) == EOF) {
-        printf("rm: cannot remove '%s': ", argv[1]);
-        fd_t fd = open(argv[1], O_RDONLY, 0);
-        if (fd == EOF) {
-            printf("No such file or directory\n");
-        } else {
-            close(fd);
-            printf("Is a directory or permission denied\n");
-        }
-    }
-}
 
 static void builtin_cd(int argc, char *argv[]) {
     if (argc < 2) return;   // todo cd ~
@@ -238,43 +283,59 @@ static void builtin_exit(int argc, char *argv[]) {
 static const cmd_t cmd_table[] = {
     {"test", builtin_test, "Run system test"},
     {"logo", builtin_logo, "Display system logo"},
-    {"pwd",  builtin_pwd,  "Print working directory"},
-    {"clear",builtin_clear,"Clear the screen"},
     {"cd",   builtin_cd,   "Change directory"},
-    {"mkdir",builtin_mkdir,"Make directory"},
-    {"rmdir",builtin_rmdir,"Remove directory"},
-    {"rm",   builtin_rm,   "Remove file"},
     {"exit", builtin_exit, "Exit the shell"},
-    {"date", builtin_date, "Display current system date and time"},
     {"help", builtin_help, "Display this help message"},
-    {"mount",builtin_mount,"Mount a filesystem"},
-    {"umount",builtin_umount,"Unmount a filesystem"},
-    {"mkfs", builtin_mkfs, "Create a filesystem"},
     {NULL, NULL, NULL}
 };
 
 static void execute(int argc, char *argv[]) {
     if (argc == 0) return;
+
+    fd_t dupfd[3];
+    if (dupfile(argc, argv, dupfd) < 0) {
+        return;
+    }
+
+    int eff_argc = 0;
+    while (eff_argc < argc && argv[eff_argc]) {
+        eff_argc++;
+    }
+    if (eff_argc == 0) {
+        close_redirect_fds(dupfd);
+        return;
+    }
+
     char *cmd_name = argv[0];
 
     // find inner command
     const cmd_t *ptr = cmd_table;
     while (ptr->name) {
         if (!strcmp(cmd_name, ptr->name)) {
-            ptr->handler(argc, argv);
+            fd_t saved[3];
+            if (apply_redirect_fds(dupfd, saved) == 0) {
+                ptr->handler(eff_argc, argv);
+                restore_redirect_fds(saved);
+            } else {
+                close_redirect_fds(dupfd);
+                restore_redirect_fds(saved);
+            }
             return;
         }
         ptr++;
     }
+
+    // external command uses child process; keep dupfd for spawn_process
 
     stat_t statbuf;
 
     // /bin/xx or ./a.out
     if (strchr(cmd_name, '/')) {
         if (stat(cmd_name, &statbuf) != EOF) {
-            spawn_process(cmd_name, argv);
+            spawn_process(cmd_name, argv, dupfd[0], dupfd[1], dupfd[2]);
             return;
         } else {
+            close_redirect_fds(dupfd);
             printf("sh: no such file or directory: %s\n", cmd_name);
         }
 
@@ -284,17 +345,12 @@ static void execute(int argc, char *argv[]) {
     // search in bin, (hello or hello.out)
     sprintf(buf, "/bin/%s", cmd_name);
     if (stat(buf, &statbuf) != EOF) {
-        spawn_process(buf, argv);
-        return;
-    }
-
-    sprintf(buf, "/bin/%s.out", cmd_name);
-    if (stat(buf, &statbuf) != EOF) {
-        spawn_process(buf, argv);
+        spawn_process(buf, argv, dupfd[0], dupfd[1], dupfd[2]);
         return;
     }
 
     // not found
+    close_redirect_fds(dupfd);
     printf("sh: command not found: %s\n", cmd_name);
 }
 

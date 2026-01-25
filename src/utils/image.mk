@@ -56,7 +56,6 @@ $(BUILD_DIR)/master.img: $(BUILD_DIR)/boot/boot.bin \
 	for app in $(BUSYBOX_APPLETS); \
 	do \
 		ln -f /mnt/bin/busybox.out /mnt/bin/$$app; \
-		ln -f /mnt/bin/busybox.out /mnt/bin/$$app.out; \
 	done
 
 # file

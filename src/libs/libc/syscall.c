@@ -138,6 +138,13 @@ int munmap(void *addr, size_t length) {
     return _syscall2(SYS_NR_MUNMAP, (u32)addr, (u32)length);
 }
 
+fd_t dup(fd_t oldfd) {
+    return _syscall1(SYS_NR_DUP, oldfd);
+}
+
+fd_t dup2(fd_t oldfd, fd_t newfd) {
+    return _syscall2(SYS_NR_DUP2, oldfd, newfd);
+}
 
 int read(fd_t fd, char *buf, int len) {
     return _syscall3(SYS_NR_READ, fd, (u32)buf, len);

@@ -28,6 +28,9 @@ fd_t creat(char *filename, int mode);
 
 void close(fd_t fd);
 
+fd_t dup(fd_t oldfd);
+fd_t dup2(fd_t oldfd, fd_t newfd);
+
 int read(fd_t fd, char *buf, int len);
 int write(fd_t fd, char *buf, int len);
 int lseek(fd_t fd, off_t offset, int whence);

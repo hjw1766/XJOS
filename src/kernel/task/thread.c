@@ -51,8 +51,8 @@ void test_thread() {
 void sync_thread() {
     set_interrupt_state(true);
     while (true) {
-        bsync();
         bool intr = interrupt_disable();
+        bsync();
         task_sleep(5000); // every 5 seconds
         set_interrupt_state(intr);
     }

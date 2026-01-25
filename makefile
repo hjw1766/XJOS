@@ -5,7 +5,7 @@ BUILD_DIR := build
 SRC_DIR := src
 
 # Busybox-style applets (kept in sync with src/utils/image.mk)
-BUSYBOX_APPLETS := ls cat echo env sh
+BUSYBOX_APPLETS := ls cat echo env pwd clear date mkdir rmdir rm mount umount mkfs sh
 
 
 # Kernel entry point address
@@ -146,13 +146,6 @@ $(BUILD_DIR)/user/busybox/busybox.o: CFLAGS += -I$(SRC_DIR)/user/builtin
 # Busybox applet objects are built from user/builtin/*.c with main() disabled.
 $(BUILD_DIR)/user/busybox/applets/%.o: CFLAGS += -DXJOS_BUSYBOX_APPLET
 $(BUILD_DIR)/user/busybox/applets/%.o: $(SRC_DIR)/user/builtin/%.c
-	@mkdir -p $(dir $@)
-	@echo "CC\t\t$<"
-	@$(CC) $(CFLAGS) -c $< -o $@
-
-# sh applet is built from user/sh.c
-$(BUILD_DIR)/user/busybox/applets/sh.o: CFLAGS += -DXJOS_BUSYBOX_APPLET
-$(BUILD_DIR)/user/busybox/applets/sh.o: $(SRC_DIR)/user/sh.c
 	@mkdir -p $(dir $@)
 	@echo "CC\t\t$<"
 	@$(CC) $(CFLAGS) -c $< -o $@

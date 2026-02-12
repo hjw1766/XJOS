@@ -911,7 +911,14 @@ inode_t *inode_open(char *pathname, int flag, int mode) {
     dcache_add(dir, name, path_len(name), inode->nr);
 
 makeup:
-    if (!permission(inode, flag & O_ACCMODE))
+    // convert flag to permission mask
+    int acc_mode = flag & O_ACCMODE;
+    u16 mask = 0;
+    if (acc_mode == O_RDONLY) mask = P_READ;
+    else if (acc_mode == O_WRONLY) mask = P_WRITE;
+    else if (acc_mode == O_RDWR) mask = P_READ | P_WRITE;
+
+    if (!permission(inode, mask))
         goto rollback; // no permission
     
     if (ISDIR(inode->desc->mode) && (flag & O_ACCMODE) != O_RDONLY)

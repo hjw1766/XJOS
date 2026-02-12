@@ -146,6 +146,10 @@ fd_t dup2(fd_t oldfd, fd_t newfd) {
     return _syscall2(SYS_NR_DUP2, oldfd, newfd);
 }
 
+int pipe(fd_t pipefd[2]) {
+    return _syscall1(SYS_NR_PIPE, (u32)pipefd);
+}
+
 int read(fd_t fd, char *buf, int len) {
     return _syscall3(SYS_NR_READ, fd, (u32)buf, len);
 }

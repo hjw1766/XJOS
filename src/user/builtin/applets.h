@@ -15,5 +15,6 @@ int cmd_mount(int argc, char **argv, char **envp);
 int cmd_umount(int argc, char **argv, char **envp);
 int cmd_mkfs(int argc, char **argv, char **envp);
 int cmd_sh(int argc, char **argv, char **envp);
+int cmd_dup(int argc, char **argv, char **envp);
 
 #endif /* XJOS_USER_BUILTIN_APPLETS_H */

@@ -82,6 +82,8 @@ extern void sys_close();
 extern fd_t sys_dup();
 extern fd_t sys_dup2();
 
+extern int sys_pipe();
+
 extern time_t sys_time();
 extern mode_t sys_umask();
 
@@ -126,6 +128,8 @@ void syscall_init() {
 
     syscall_table[SYS_NR_DUP] = sys_dup;
     syscall_table[SYS_NR_DUP2] = sys_dup2;
+
+    syscall_table[SYS_NR_PIPE] = sys_pipe;
 
     syscall_table[SYS_NR_MKDIR] = sys_mkdir;
     syscall_table[SYS_NR_RMDIR] = sys_rmdir;

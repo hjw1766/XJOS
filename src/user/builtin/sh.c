@@ -60,9 +60,33 @@ static void print_prompt() {
     printf("[root %s]# ", base);
 }
 
-static void spawn_process(char *filename, char *argv[], fd_t infd, fd_t outfd, fd_t errfd);
+static pid_t spawn_process(char *filename, char *argv[], fd_t infd, fd_t outfd, fd_t errfd);
 
 // -------- builtin functions --------
+static pid_t lookup_and_spawn(char **cmd_argv, fd_t infd, fd_t outfd, fd_t errfd) {
+    char *cmd_name = cmd_argv[0];
+
+    stat_t statbuf;
+
+    if (strchr(cmd_name, '/')) {
+        if (stat(cmd_name, &statbuf) != EOF) {
+            return spawn_process(cmd_name, cmd_argv, infd, outfd, errfd);
+        }
+    } else {
+        sprintf(buf, "/bin/%s", cmd_name);
+        if (stat(buf, &statbuf) != EOF) {
+            return spawn_process(buf, cmd_argv, infd, outfd, errfd);
+        }
+    }
+
+    printf("sh: command not found: %s\n", cmd_name);
+
+    if (infd != EOF && infd != STDIN_FILENO) close(infd);
+    if (outfd != EOF && outfd != STDOUT_FILENO) close(outfd);
+
+    return -1;
+}
+
 static int dupfile(int argc, char *argv[], fd_t dupfd[3]) {
     for (size_t i = 0; i < 3; i++) {
         dupfd[i] = EOF;
@@ -196,27 +220,27 @@ static void close_redirect_fds(fd_t dupfd[3]) {
     }
 }
 
-static void spawn_process(char *filename, char *argv[], fd_t infd, fd_t outfd, fd_t errfd) {
+static pid_t spawn_process(char *filename, char *argv[], fd_t infd, fd_t outfd, fd_t errfd) {
     int status;
     pid_t pid = fork();
 
-    if (pid) {
-        if (infd != EOF) close(infd);
-        if (outfd != EOF) close(outfd);
-        if (errfd != EOF) close(errfd);
-        (void)waitpid(pid, &status);
-        return;
+    if (pid > 0) {
+        if (infd != EOF && infd != STDIN_FILENO) close(infd);
+        if (outfd != EOF && outfd != STDOUT_FILENO) close(outfd);
+        if (errfd != EOF && errfd != STDERR_FILENO) close(errfd);
+
+        return pid;
     }
 
-    if (infd != EOF) {
+    if (infd != EOF && infd != STDIN_FILENO) {
         (void)dup2(infd, STDIN_FILENO);
         close(infd);
     }
-    if (outfd != EOF) {
+    if (outfd != EOF && outfd != STDOUT_FILENO) {
         (void)dup2(outfd, STDOUT_FILENO);
         close(outfd);
     }
-    if (errfd != EOF) {
+    if (errfd != EOF && errfd != STDERR_FILENO) {
         (void)dup2(errfd, STDERR_FILENO);
         close(errfd);
     }
@@ -292,66 +316,82 @@ static const cmd_t cmd_table[] = {
 static void execute(int argc, char *argv[]) {
     if (argc == 0) return;
 
+    // 1. handle redirection
     fd_t dupfd[3];
     if (dupfile(argc, argv, dupfd) < 0) {
         return;
     }
 
-    int eff_argc = 0;
-    while (eff_argc < argc && argv[eff_argc]) {
-        eff_argc++;
-    }
-    if (eff_argc == 0) {
-        close_redirect_fds(dupfd);
-        return;
+    // 2. check pipe or not
+    bool has_pipe = false;
+    for (int i = 0; i < argc; i++) {
+        if (argv[i] && !strcmp(argv[i], "|")) {
+            has_pipe = true;
+            break;
+        }
     }
 
-    char *cmd_name = argv[0];
-
-    // find inner command
-    const cmd_t *ptr = cmd_table;
-    while (ptr->name) {
-        if (!strcmp(cmd_name, ptr->name)) {
-            fd_t saved[3];
-            if (apply_redirect_fds(dupfd, saved) == 0) {
-                ptr->handler(eff_argc, argv);
-                restore_redirect_fds(saved);
-            } else {
+    // 3. no pipe, execute single command
+    if (!has_pipe) {
+        const cmd_t *ptr = cmd_table;
+        while (ptr->name) {
+            if (!strcmp(argv[0], ptr->name)) {
+                fd_t saved[3];
+                if (apply_redirect_fds(dupfd, saved) == 0) {
+                    ptr->handler(argc, argv);
+                    restore_redirect_fds(saved);
+                }
                 close_redirect_fds(dupfd);
-                restore_redirect_fds(saved);
+                return;
             }
-            return;
+            ptr++;
         }
-        ptr++;
     }
 
-    // external command uses child process; keep dupfd for spawn_process
+    // 4. has pipe, execute piped commands
+    fd_t input_fd = (dupfd[0] == EOF) ? STDIN_FILENO : dupfd[0];
+    fd_t error_fd = (dupfd[2] == EOF) ? STDERR_FILENO : dupfd[2];
 
-    stat_t statbuf;
+    char **current_cmd = argv;
+    int pids[MAX_ARG_NR];
+    int pid_count = 0;
 
-    // /bin/xx or ./a.out
-    if (strchr(cmd_name, '/')) {
-        if (stat(cmd_name, &statbuf) != EOF) {
-            spawn_process(cmd_name, argv, dupfd[0], dupfd[1], dupfd[2]);
-            return;
-        } else {
-            close_redirect_fds(dupfd);
-            printf("sh: no such file or directory: %s\n", cmd_name);
+    for (int i = 0; i <= argc; i++) {
+        if (!argv[i]) continue;
+
+        if (strcmp(argv[i], "|") == 0) {
+            argv[i] = NULL;
+
+            fd_t pipefd[2];
+            if (pipe(pipefd) == EOF) {
+                printf("sh: pipe failed\n");
+                return;
+            }
+
+            // in -> input_fd, out -> pipefd[1]
+            pid_t pid = lookup_and_spawn(current_cmd, input_fd, pipefd[1], error_fd);
+            if (pid > 0) pids[pid_count++] = pid;
+
+            input_fd = pipefd[0];
+
+            current_cmd = &argv[i + 1];
         }
-
-        return;
     }
 
-    // search in bin, (hello or hello.out)
-    sprintf(buf, "/bin/%s", cmd_name);
-    if (stat(buf, &statbuf) != EOF) {
-        spawn_process(buf, argv, dupfd[0], dupfd[1], dupfd[2]);
-        return;
+    // 5. execute last command
+    // in -> prev pipe read, out -> dupfd[1] or STDOUT
+    fd_t final_out = (dupfd[1] == EOF) ? STDOUT_FILENO : dupfd[1];
+
+    if (current_cmd[0] != NULL) {
+        pid_t pid = lookup_and_spawn(current_cmd, input_fd, final_out, error_fd);
+        if (pid > 0) pids[pid_count++] = pid;
     }
 
-    // not found
-    close_redirect_fds(dupfd);
-    printf("sh: command not found: %s\n", cmd_name);
+    // 6. wait for all child processes
+    for (int i = 0; i < pid_count; i++) {
+        int status;
+        waitpid(pids[i], &status);
+    }
 }
 
 static void readline(char *buf, int count) {

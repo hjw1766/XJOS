@@ -64,6 +64,9 @@ typedef struct inode_t {
     time_t ctime;        // change time
     list_node_t node;    // list node
     dev_t mount;        // install device
+    struct task_t *rxwaiter;    // read wait process
+    struct task_t *txwaiter;    // write wait process
+    bool pipe;          // is pipe inode
 } inode_t;
 
 typedef struct super_desc_t {
@@ -165,5 +168,11 @@ int devmkfs(dev_t dev, u32 icount);
 #define P_WRITE IWOTH
 
 bool permission(inode_t *inode, u16 mask);
+
+inode_t *get_pipe_inode();
+
+int pipe_read(inode_t *inode, char *buf, int count);
+
+int pipe_write(inode_t *inode, char *buf, int count);
 
 #endif // XJOS_FS_H

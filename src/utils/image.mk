@@ -60,6 +60,7 @@ $(BUILD_DIR)/master.img: $(BUILD_DIR)/boot/boot.bin \
 
 # file
 	echo "hello xjos!!!" > /mnt/hello.txt
+	chmod 666 /mnt/hello.txt
 
 # Fix gip bug
 	sudo chown -R 1000:0 /mnt

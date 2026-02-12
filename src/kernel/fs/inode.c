@@ -6,6 +6,9 @@
 #include <xjos/string.h>
 #include <xjos/stdlib.h>
 #include <xjos/task.h>
+#include <xjos/memory.h>
+#include <xjos/arena.h>
+#include <xjos/fifo.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
@@ -39,6 +42,38 @@ static void put_free_inode(inode_t *inode) {
 // get root inode
 inode_t *get_root_inode() {
     return inode_table;
+}
+
+
+inode_t *get_pipe_inode() {
+    inode_t *inode = get_free_inode();
+    
+    inode->dev = -2; // pipe dev
+
+    //  Pointer Overloading
+    inode->desc = (inode_desc_t *)kmalloc(sizeof(fifo_t));
+    inode->buf = (void *)alloc_kpage(1);
+    
+    inode->count = 2;       // read and write
+    inode->pipe = true;
+
+    fifo_init((fifo_t *)inode->desc, (char *)inode->buf, PAGE_SIZE);
+    return inode;
+}
+
+
+void put_pipe_inode(inode_t *inode) {
+    if (!inode)
+        return;
+    inode->count--;
+    if (inode->count)
+        return;
+    inode->pipe = false;
+
+    kfree(inode->desc);
+    free_kpage((u32)inode->buf, 1);
+
+    put_free_inode(inode);
 }
 
 
@@ -158,6 +193,10 @@ void iput(inode_t *inode) {
     if (!inode)
         return;
 
+    if (inode->pipe) {
+        return put_pipe_inode(inode);
+    }
+
     inode->count--;
     if (inode->count)
         return;
@@ -176,6 +215,9 @@ void inode_init() {
     for (size_t i = 0; i < INODE_NR; i++) {
         inode_t *inode = &inode_table[i];
         inode->dev = EOF;
+        inode->pipe = false;
+        inode->rxwaiter = NULL;
+        inode->txwaiter = NULL;
     }
 }
 

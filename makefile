@@ -5,7 +5,7 @@ BUILD_DIR := build
 SRC_DIR := src
 
 # Busybox-style applets (kept in sync with src/utils/image.mk)
-BUSYBOX_APPLETS := ls cat echo env pwd clear date mkdir rmdir rm mount umount mkfs sh
+BUSYBOX_APPLETS := ls cat echo env pwd clear date mkdir rmdir rm mount umount mkfs sh dup
 
 
 # Kernel entry point address

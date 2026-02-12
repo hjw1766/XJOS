@@ -101,7 +101,10 @@ int sys_read(fd_t fd, char *buf, int len) {
     inode_t *inode = file->inode;
     
     // 1. 多态分发
-    if (ISCHR(inode->desc->mode)) {
+    if (inode->pipe) {
+        r_len = pipe_read(inode, buf, len);
+        return r_len;
+    } else if (ISCHR(inode->desc->mode)) {
         assert(inode->desc->zones[0]);
         r_len = device_read(inode->desc->zones[0], buf, len, 0, 0);
     } else if (ISBLK(inode->desc->mode)) {
@@ -141,8 +144,10 @@ int sys_write(fd_t fd, char *buf, int len) {
     int w_len = 0;
     inode_t *inode = file->inode;
     assert(inode);
-
-    if (ISCHR(inode->desc->mode)) {
+    if (inode->pipe) {
+        w_len = pipe_write(inode, buf, len);
+        return w_len;
+    } else if (ISCHR(inode->desc->mode)) {
         assert(inode->desc->zones[0]);
         w_len = device_write(inode->desc->zones[0], buf, len, 0, 0);
     } else if (ISBLK(inode->desc->mode)) {

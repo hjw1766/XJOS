@@ -36,6 +36,7 @@ static const applet_t applets[] = {
     {"umount", cmd_umount},
     {"mkfs", cmd_mkfs},
     {"sh", cmd_sh},
+    {"dup", cmd_dup},
     {NULL, NULL},
 };
 

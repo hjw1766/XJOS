@@ -8,6 +8,7 @@
 #include <xjos/task.h>
 #include <xjos/syscall_nr.h>
 #include <fs/fs.h>
+#include <xjos/printk.h>
 
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
@@ -304,7 +305,7 @@ void mapping_init() {
 
         page_entry_t *entry = &pde[didx];   // pde -> pte
         entry_init(entry, IDX((u32)pte));
-
+        entry->user = 0;    // user stop access kernel page table
 
         for (idx_t tidx = 0; tidx < 1024; tidx++, index++) {
             // dont mapping the first page, *(null)
@@ -312,6 +313,7 @@ void mapping_init() {
                 continue;
             page_entry_t *tentry = &pte[tidx];
             entry_init(tentry, index);
+            tentry->user = 0; // user stop access kernel page
             memory_map[index] = 1;
         }
     }
@@ -646,8 +648,17 @@ void page_fault(u32 vector,
     task_t *task = running_task();
 
     // 16M -- 256M
-    assert((KERNEL_MEMORY_SIZE <= vaddr) && (vaddr < USER_STACK_TOP));
+    // assert((KERNEL_MEMORY_SIZE <= vaddr) && (vaddr < USER_STACK_TOP));
     
+    // if user process access kernel memory, panic
+    if (vaddr < USER_EXEC_ADDR || vaddr >= USER_STACK_TOP) {
+        assert(task->uid);
+        printk("Segmentation Fault: Invalid memory access at 0x%p by task %s (pid %d)\n",
+            vaddr, task->name, task->pid);
+
+        task_exit(-1);
+    }
+
     // * Copy-on-Write (CoW)
     if (code->present && code->write) { 
         page_entry_t *entry = get_entry(vaddr, false);
@@ -685,6 +696,8 @@ void page_fault(u32 vector,
 
         return;
     }
+
+    LOGK("task 0x%p name %s brk 0x%p page fault\n", task, task->name, task->brk);
 
     panic("page fault!!!");
 }

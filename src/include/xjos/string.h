@@ -3,6 +3,9 @@
 
 #include <xjos/types.h>
 
+#define SEPARATOR1 '/'            // directory separator
+#define SEPARATOR2 '\\'           
+#define IS_SEPARATOR(c) (c == SEPARATOR1 || c == SEPARATOR2)
 
 char *strcpy(char *dest, const char *src);
 char *strcat(char *dest, const char *src);
@@ -16,7 +19,8 @@ int memcmp(const void *lhs, const void *rhs, size_t count);
 void *memset(void *dest, int ch, size_t count);
 void *memcpy(void *dest, const void *src, size_t count);
 void *memchr(const void *ptr, int ch, size_t count);
-
+char *strsep(const char *str);
+char *strrsep(const char *str);
 
 
 

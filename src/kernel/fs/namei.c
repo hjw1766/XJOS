@@ -33,31 +33,6 @@ bool permission(inode_t *inode, u16 mask) {
     return (perm & mask) == mask;
 }
 
-
-// get first separator
-char *strsep(const char *str) {
-    char *ptr = (char *)str;
-    while (true) {
-        if (IS_SEPARATOR(*ptr))
-            return ptr;
-        
-        if (*ptr++ == EOS)
-            return NULL;
-    }
-}
-
-
-char *strrsep(const char *str) {
-    char *last = NULL;
-    char *ptr = (char *)str;
-    while (true) {
-        if (IS_SEPARATOR(*ptr))
-            last = ptr;
-        if (*ptr++ == EOS)
-            return last;
-    }
-}
-
 /**
  * 哈希相关
  */

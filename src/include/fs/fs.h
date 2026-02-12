@@ -25,10 +25,6 @@
 #define INDIRECT2_BLOCK (BLOCK_INDEXES * BLOCK_INDEXES) // indirect2 block numbers in inode
 #define TOTAL_BLOCK (DIRECT_BLOCK + INDIRECT1_BLOCK + INDIRECT2_BLOCK) // total block numbers in inode
 
-#define SEPARATOR1 '/'            // directory separator
-#define SEPARATOR2 '\\'           
-#define IS_SEPARATOR(c) (c == SEPARATOR1 || c == SEPARATOR2)
-
 #define ACC_MODE(x) ("\004\002\006\377"[(x) & O_ACCMODE])
 
 enum file_flag {

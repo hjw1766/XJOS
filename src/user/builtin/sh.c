@@ -273,7 +273,9 @@ static void builtin_logo(int argc, char *argv[]) {
 static void builtin_test(int argc, char *argv[]) {
     (void)argc;
     (void)argv;
-    printf("Running system test...\n");
+    char *ptr = (char *)0xB8000; // video memory
+
+    *ptr = 'X';
 }
 
 static void builtin_help(int argc, char *argv[]) {
@@ -465,6 +467,8 @@ int cmd_sh(int argc, char **argv, char **envp) {
         int cargc = cmd_parse(cmd, args, ' ');
         if (cargc > 0) {
             execute(cargc, args);
+
+            printf("Done.\n");
         }
     }
 

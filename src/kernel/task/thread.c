@@ -26,8 +26,16 @@ extern int sys_execve(char *filename, char *argv[], char *envp[]);
 
 extern void dev_init();
 
+extern void init_user_thread();
+
 void init_thread() {
     dev_init();
+
+#ifdef XJOS_DEBUG
+
+    task_to_user_mode(init_user_thread);
+
+#else
 
     // Enter user mode and run /bin/init (a tiny supervisor that respawns /bin/sh).
     task_prepare_user_mode();
@@ -35,6 +43,7 @@ void init_thread() {
     char *envp[] = {"HOME=/", "PATH=/bin", NULL};
     sys_execve("/bin/init", argv, envp);
     panic("init: failed to exec /bin/init");
+#endif
 }  
 
 

@@ -4,6 +4,8 @@
 BUILD_DIR := build
 SRC_DIR := src
 
+DEBUG ?= 1
+
 # Busybox-style applets (kept in sync with src/utils/image.mk)
 BUSYBOX_APPLETS := ls cat echo env pwd clear date mkdir rmdir rm mount umount mkfs sh dup
 
@@ -34,6 +36,10 @@ CFLAGS += -g                       # Add debug info
 CFLAGS += -I$(SRC_DIR)/include     # Add include path
 CFLAGS += -DXJOS
 
+ifeq ($(DEBUG), 1)
+CFLAGS += -DXJOS_DEBUG
+endif
+
 # Assembler options (for kernel)
 ASMFLAGS := -f elf32 -g -F dwarf
 
@@ -58,9 +64,18 @@ KERNEL_OBJS_AUTO := \
 KERNEL_COMMON_C_SRCS := $(shell find $(SRC_DIR)/libs/common -type f -name '*.c' | LC_ALL=C sort)
 KERNEL_COMMON_OBJS := $(patsubst $(SRC_DIR)/libs/common/%.c,$(BUILD_DIR)/kernel/common/%.o,$(KERNEL_COMMON_C_SRCS))
 
+ifeq ($(DEBUG), 1)
+KERNEL_DEBUG_OBJS := \
+	$(BUILD_DIR)/user/init.o \
+    $(BUILD_DIR)/libs/libc/printf.o \
+    $(BUILD_DIR)/libs/libc/syscall.o
+else
+KERNEL_DEBUG_OBJS :=
+endif
+
 # Ensure start.o remains first in the link list.
 KERNEL_START_OBJ := $(BUILD_DIR)/kernel/x86/start.o
-KERNEL_OBJS := $(KERNEL_START_OBJ) $(filter-out $(KERNEL_START_OBJ),$(KERNEL_OBJS_AUTO) $(KERNEL_COMMON_OBJS))
+KERNEL_OBJS := $(KERNEL_START_OBJ) $(filter-out $(KERNEL_START_OBJ),$(KERNEL_OBJS_AUTO) $(KERNEL_COMMON_OBJS)) $(KERNEL_DEBUG_OBJS)
 
 # ====================================================================
 #                        用户态库文件列表 (手动维护)

@@ -43,3 +43,15 @@ int main(int argc, char **argv, char **envp) {
         sleep(200);
     }
 }
+
+#ifdef XJOS_DEBUG
+
+void init_user_thread() {
+    main(0, NULL, NULL);
+
+    while (true) {
+        sleep(1000);
+    }
+}
+
+#endif // XJOS_DEBUG

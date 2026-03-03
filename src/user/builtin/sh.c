@@ -466,9 +466,36 @@ int cmd_sh(int argc, char **argv, char **envp) {
 
         int cargc = cmd_parse(cmd, args, ' ');
         if (cargc > 0) {
-            execute(cargc, args);
 
-            printf("Done.\n");
+            // handle built-in commands (cd, exit) in the shell process itself
+            if (strcmp(args[0], "cd") == 0 || strcmp(args[0], "exit") == 0) {
+                execute(cargc, args);
+
+                if (strcmp(args[0], "exit") == 0) {
+                    break;
+                }
+                continue;
+            }
+
+            pid_t pid = fork();
+
+            if (pid == 0) {
+                execute(cargc, args);
+                exit(0);
+
+                while (true);
+            } else if (pid > 0) {
+                int32 status;
+                waitpid(pid, &status);
+
+                if (status == -1) {
+                    printf("Segmentation fault (core dumped)\n");
+                }
+            } else {
+                printf("sh: fork failed\n");
+            }
+        } else {
+            printf("sh: parse command failed\n");
         }
     }
 

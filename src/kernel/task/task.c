@@ -476,8 +476,8 @@ void task_to_user_mode(target_t target) {
     u32 stack_top = (u32)task + PAGE_SIZE;
     stack_top -= sizeof(intr_frame_t);
     intr_frame_t *iframe = (intr_frame_t *)stack_top;
-    
-    memset(iframe, 0, sizeof(intr_frame_t));
+
+    // memset(iframe, 0, sizeof(intr_frame_t)); // ! error dont zero
     
     iframe->vector = 0x20; // 这里的 vector 意义不大，主要是为了对齐
     iframe->cs = USER_CODE_SELECTOR | 3;

@@ -16,6 +16,11 @@
 extern int sys_read(fd_t fd, char *buf, int len);
 extern int sys_lseek(fd_t fd, int offset, int whence);
 
+#ifdef XJOS_DEBUG
+#define USER_MEMORY true
+#else
+#define USER_MEMORY false
+#endif
 
 #define ZONE_VALID 1    // ards Valid zone
 #define ZONE_RESERVED 2 // ards Reserved zone
@@ -305,7 +310,7 @@ void mapping_init() {
 
         page_entry_t *entry = &pde[didx];   // pde -> pte
         entry_init(entry, IDX((u32)pte));
-        entry->user = 0;    // user stop access kernel page table
+        entry->user = USER_MEMORY;    // user stop access kernel page table
 
         for (idx_t tidx = 0; tidx < 1024; tidx++, index++) {
             // dont mapping the first page, *(null)
@@ -313,7 +318,7 @@ void mapping_init() {
                 continue;
             page_entry_t *tentry = &pte[tidx];
             entry_init(tentry, index);
-            tentry->user = 0; // user stop access kernel page
+            tentry->user = USER_MEMORY; // user stop access kernel page
             memory_map[index] = 1;
         }
     }
@@ -653,8 +658,8 @@ void page_fault(u32 vector,
     // if user process access kernel memory, panic
     if (vaddr < USER_EXEC_ADDR || vaddr >= USER_STACK_TOP) {
         assert(task->uid);
-        printk("Segmentation Fault: Invalid memory access at 0x%p by task %s (pid %d)\n",
-            vaddr, task->name, task->pid);
+        // printk("Segmentation Fault: Invalid memory access at 0x%p by task %s (pid %d)\n",
+        //     vaddr, task->name, task->pid);
 
         task_exit(-1);
     }

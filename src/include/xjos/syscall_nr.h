@@ -43,8 +43,7 @@ typedef enum {
     SYS_NR_YIELD = 158,
     SYS_NR_SLEEP = 162,
     SYS_NR_GETCWD = 183,
-    SYS_NR_CLEAR = 200,
-    SYS_NR_MKFS = 201,
+    SYS_NR_MKFS = 200,
 } syscall_t;
 
 enum mmap_type_t {

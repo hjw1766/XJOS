@@ -4,7 +4,7 @@
 BUILD_DIR := build
 SRC_DIR := src
 
-DEBUG ?= 1
+DEBUG ?= 0
 
 # Busybox-style applets (kept in sync with src/utils/image.mk)
 BUSYBOX_APPLETS := ls cat echo env pwd clear date mkdir rmdir rm mount umount mkfs sh dup

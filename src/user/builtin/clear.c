@@ -1,6 +1,8 @@
 #include <xjos/types.h>
 #include <xjos/syscall.h>
 
+extern void clear();
+
 int cmd_clear(int argc, char **argv, char **envp) {
     (void)argc;
     (void)argv;

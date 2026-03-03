@@ -61,8 +61,6 @@ mode_t umask(mode_t mask);
 
 void sync();
 
-void clear();
-
 int stat(char *filename, stat_t *statbuf);
 int fstat(fd_t fd, stat_t *statbuf);
 

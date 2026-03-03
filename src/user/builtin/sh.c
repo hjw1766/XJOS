@@ -57,7 +57,13 @@ static void print_prompt() {
     }
     const char *base = basename(cwd);
     if (*base == '\0') base = "/";
-    printf("[root %s]# ", base);
+    printf("\033[30;45m[root %s]\033[0m# ", base);
+}
+
+void clear() {
+    // clear screen by printing ANSI escape code
+    printf("\x1b[2J\x1b[0;0H");
+
 }
 
 static pid_t spawn_process(char *filename, char *argv[], fd_t infd, fd_t outfd, fd_t errfd);
@@ -260,6 +266,8 @@ static void builtin_logo(int argc, char *argv[]) {
     int logo_width = 23;
     int padding = (terminal_width - logo_width) / 2;
 
+    printf("\033[1;36m");
+
     for (int i = 0; i < 5; i++) {
         for (int j = 0; j < padding; j++) {
             printf(" ");
@@ -267,7 +275,7 @@ static void builtin_logo(int argc, char *argv[]) {
         printf("%s\n", logo[i]);
     }
 
-    printf("\n");
+    printf("\033[0m\n");
 }
 
 static void builtin_test(int argc, char *argv[]) {

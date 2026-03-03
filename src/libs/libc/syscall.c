@@ -243,10 +243,6 @@ void sync() {
     _syscall0(SYS_NR_SYNC);
 }
 
-void clear() {
-    _syscall0(SYS_NR_CLEAR);
-}
-
 int stat(char *filename, stat_t *statbuf) {
     return _syscall2(SYS_NR_STAT, (u32)filename, (u32)statbuf);
 }

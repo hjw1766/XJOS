@@ -4,6 +4,7 @@
 #include <xjos/assert.h>
 #include <xjos/debug.h>
 #include <xjos/arena.h>
+#include <xjos/errno.h>
 
 
 
@@ -192,7 +193,7 @@ void device_request(dev_t dev, void *buf, u8 count, idx_t idx, int flags, u32 ty
 
     if (!empty) {   // wait for device idle
         req->task = running_task();
-        task_block(req->task, NULL, TASK_BLOCKED);
+        task_block(req->task, NULL, TASK_BLOCKED, TIMELESS);
     }
 
     do_request(req);    // do req
@@ -204,6 +205,6 @@ void device_request(dev_t dev, void *buf, u8 count, idx_t idx, int flags, u32 ty
 
     if (nextreq) {
         assert(nextreq->task->magic == XJOS_MAGIC);
-        task_unblock(nextreq->task);   // wake up next req task
+        task_unblock(nextreq->task, EOK);   // wake up next req task
     }
 }

@@ -11,6 +11,7 @@
 #include <xjos/global.h>
 #include <xjos/arena.h>
 #include <fs/fs.h>
+#include <xjos/errno.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
@@ -67,6 +68,12 @@ static task_t *get_free_task() {
     return NULL;
 }
 
+static void task_timeout(task_t *task) {
+    bool intr = interrupt_disable();
+    task_unblock(task, -ETIME);
+    set_interrupt_state(intr);
+}
+
 // ----------------------------------------------------------------------------
 // 调度状态控制 (Sleep, Wakeup, Block)
 // ----------------------------------------------------------------------------
@@ -111,7 +118,7 @@ bool task_wakeup() {
         task_t *task = list_entry(ptr, task_t, node);
 
         if (time_after_eq(jiffies, task->wakeup_time)) {
-            task_unblock(task);
+            task_unblock(task, EOK);
             task->wakeup_time = 0;
             woken = true;
             ptr = next;
@@ -123,18 +130,21 @@ bool task_wakeup() {
     return woken;
 }
 
-void task_block(task_t *task, list_t *blist, task_state_t state) {
+int task_block(task_t *task, list_t *blist, task_state_t state, int timeout_ms) {
     assert(!get_interrupt_state());
     if (!blist) blist = &block_list;
     list_push(blist, &task->node);
     task->state = state;
     
     if (task == running_task()) schedule();
+
+    return task->status;
 }
 
-void task_unblock(task_t *task) {
+void task_unblock(task_t *task, int reason) {
     assert(!get_interrupt_state());
     if (task->node.next) list_remove(&task->node);
+    task->status = reason;
     task->state = TASK_READY;
 
     // CFS 唤醒补偿: 防止睡眠太久的任务获得过多的时间片打击当前任务
@@ -386,7 +396,7 @@ void task_exit(int status) {
     // 如果父进程正在等待 (WAITING) 且条件满足，则唤醒它
     if (parent->state == TASK_WAITING && 
        (parent->waitpid == -1 || parent->waitpid == task->pid)) {
-        task_unblock(parent);
+        task_unblock(parent, EOK);
     }
     
     // 5. 调度 (永不返回)
@@ -420,7 +430,7 @@ pid_t task_waitpid(pid_t pid, int32 *status) {
         // 如果有子进程但都在运行，则阻塞当前进程等待
         if (has_child) {
             task->waitpid = pid;
-            task_block(task, NULL, TASK_WAITING);
+            task_block(task, NULL, TASK_WAITING, TIMELESS);
             continue; // 被唤醒后重新扫描
         }
         

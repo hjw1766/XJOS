@@ -9,6 +9,7 @@
 #include <xjos/fifo.h>
 #include <xjos/assert.h>
 #include <xjos/debug.h>
+#include <xjos/errno.h>
 
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
@@ -21,12 +22,12 @@ int pipe_read(inode_t *inode, char *buf, int count) {
         if (fifo_empty(fifo)) {
             assert(inode->rxwaiter == NULL);
             inode->rxwaiter = running_task();
-            task_block(inode->rxwaiter, NULL, TASK_BLOCKED);
+            task_block(inode->rxwaiter, NULL, TASK_BLOCKED, TIMELESS);
         }
 
         buf[nr++] = fifo_get(fifo);
         if (inode->txwaiter) {
-            task_unblock(inode->txwaiter);
+            task_unblock(inode->txwaiter, EOK);
             inode->txwaiter = NULL;
         }
     }
@@ -42,11 +43,11 @@ int pipe_write(inode_t *inode, char *buf, int count) {
         if (fifo_full(fifo)) {
             assert(inode->txwaiter == NULL);
             inode->txwaiter = running_task();
-            task_block(inode->txwaiter, NULL, TASK_BLOCKED);
+            task_block(inode->txwaiter, NULL, TASK_BLOCKED, TIMELESS);
         }
         fifo_put(fifo, buf[nr++]);
         if (inode->rxwaiter) {
-            task_unblock(inode->rxwaiter);
+            task_unblock(inode->rxwaiter, EOK);
             inode->rxwaiter = NULL;
         }
     }

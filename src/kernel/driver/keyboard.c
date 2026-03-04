@@ -6,6 +6,7 @@
 #include <xjos/task.h>
 #include <xjos/fifo.h>
 #include <drivers/device.h>
+#include <xjos/errno.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
@@ -344,7 +345,7 @@ void keyboard_handler(int vector) {
 
     fifo_put(&fifo, ch);
     if (waiter != NULL) {
-        task_unblock(waiter);
+        task_unblock(waiter, EOK);
         waiter = NULL;
     }
 }
@@ -356,7 +357,7 @@ u32 keyboard_read(void *dev, char *buffer, u32 count) {
     while (nr < count) {
         while (fifo_empty(&fifo)) {
             waiter = running_task();
-            task_block(waiter, NULL, TASK_WAITING);
+            task_block(waiter, NULL, TASK_WAITING, TIMELESS);
         }
         buffer[nr++] = fifo_get(&fifo);
     }

@@ -3,6 +3,7 @@
 #include <xjos/task.h>
 #include <xjos/task.h>
 #include <xjos/debug.h>
+#include <xjos/errno.h>
 
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
@@ -20,7 +21,7 @@ void sem_wait(semaphore_t *sem) {
     task_t *current = running_task();
 
     while (sem->value == 0) 
-        task_block(current, &sem->waiters, TASK_BLOCKED);
+        task_block(current, &sem->waiters, TASK_BLOCKED, TIMELESS);
 
     assert(sem->value == 1);
     
@@ -43,7 +44,7 @@ void sem_post(semaphore_t *sem) {
     if (!list_empty(&sem->waiters)) {
         task_t *task = list_entry(sem->waiters.head.prev, task_t, node);
         assert(task->magic == XJOS_MAGIC);
-        task_unblock(task);
+        task_unblock(task, EOK);
 
         task_yield();
     }

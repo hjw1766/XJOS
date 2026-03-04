@@ -9,6 +9,7 @@
 #include <xjos/debug.h>
 #include <xjos/assert.h>
 #include <drivers/device.h>
+#include <xjos/errno.h>
 
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
@@ -132,7 +133,7 @@ static void ide_handler(int vector) {
 
     if (ctrl->waiter) {
         // have process waiter
-        task_unblock(ctrl->waiter);
+        task_unblock(ctrl->waiter, EOK);
         ctrl->waiter = NULL;
     }
 }
@@ -266,7 +267,7 @@ int ide_pio_read(ide_disk_t *disk, void *buf, u8 count, idx_t lba) {
         task_t *task = running_task();
         if (task->state == TASK_RUNNING) {
             ctrl->waiter = task;
-            task_block(task, NULL, TASK_BLOCKED);
+            task_block(task, NULL, TASK_BLOCKED, TIMELESS);
         }
         
         // DRQ, cpu ready to receive data
@@ -305,7 +306,7 @@ int ide_pio_write(ide_disk_t *disk, void *buf, u8 count, idx_t lba) {
         task_t *task = running_task();
         if (task->state == TASK_RUNNING) {
             ctrl->waiter = task;
-            task_block(task, NULL, TASK_BLOCKED);
+            task_block(task, NULL, TASK_BLOCKED, TIMELESS);
         }
 
         // wait for BSY = 1

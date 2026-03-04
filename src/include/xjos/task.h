@@ -160,8 +160,8 @@ void task_yield();
 void task_sleep(u32 ms);
 bool task_wakeup();
 
-void task_block(task_t *task, list_t *blist, task_state_t state);
-void task_unblock(task_t *task);
+int task_block(task_t *task, list_t *blist, task_state_t state, int timeout_ms);
+void task_unblock(task_t *task, int reason);
 void task_activate(task_t *task);
 
 pid_t task_fork();

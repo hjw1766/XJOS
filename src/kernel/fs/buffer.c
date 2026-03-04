@@ -5,6 +5,7 @@
 #include <xjos/assert.h>
 #include <xjos/string.h>
 #include <drivers/device.h>
+#include <xjos/errno.h>
 
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
@@ -126,7 +127,7 @@ static buffer_t *get_free_buffer() {
         }
 
         // 3. wait for buffer release
-        task_block(running_task(), &wait_list, TASK_WAITING);
+        task_block(running_task(), &wait_list, TASK_WAITING, TIMELESS);
     }
 }
 
@@ -216,7 +217,7 @@ void brelse(buffer_t *bf) {
         if (!list_empty(&wait_list)) {
             // wake up one waiting task
             task_t *task = list_entry(list_pop(&wait_list), task_t, node);
-            task_unblock(task);
+            task_unblock(task, EOK);
         }
     }
 }

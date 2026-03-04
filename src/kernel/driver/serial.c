@@ -8,6 +8,7 @@
 #include <xjos/debug.h>
 #include <xjos/stdarg.h>
 #include <xjos/stdio.h>
+#include <xjos/errno.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
@@ -56,7 +57,7 @@ void recv_data(serial_t *serial) {
     
     fifo_put(&serial->rx_fifo, ch);
     if (serial->rx_waiter != NULL ) {
-        task_unblock(serial->rx_waiter);
+        task_unblock(serial->rx_waiter, EOK);
         serial->rx_waiter = NULL;
     }
 }
@@ -75,7 +76,7 @@ void serial_handler(int vector) {
 
     // 可发数据且有等待的写任务
     if ((state & LSR_THRE) && serial->tx_waiter) {
-        task_unblock(serial->tx_waiter);
+        task_unblock(serial->tx_waiter, EOK);
         serial->tx_waiter = NULL;
     }
 }
@@ -88,7 +89,7 @@ int serial_read(serial_t *serial, char *buf, u32 count) {
         while (fifo_empty(&serial->rx_fifo)) {
             assert(serial->rx_waiter == NULL);
             serial->rx_waiter = running_task();
-            task_block(serial->rx_waiter, NULL, TASK_BLOCKED);
+            task_block(serial->rx_waiter, NULL, TASK_BLOCKED, TIMELESS);
         }
         buf[nr++] = fifo_get(&serial->rx_fifo);
     }
@@ -108,7 +109,7 @@ int serial_write(serial_t *serial, char *buf, u32 count) {
         }
         task_t *task = running_task();
         serial->tx_waiter = task;
-        task_block(task, NULL, TASK_BLOCKED);
+        task_block(task, NULL, TASK_BLOCKED, TIMELESS);
     }
     mutex_unlock(&serial->wlock);
     return nr;

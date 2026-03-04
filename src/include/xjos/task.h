@@ -76,6 +76,7 @@ typedef struct task_t {
     u32 text;               // 代码段起始地址
     u32 data;               // 数据段起始地址
     u32 end;                // BSS 段结束地址
+    struct timer_t *block_timer; // 阻塞定时器
 
     // === 3. 内存管理 ===
     u32 pde;                 // 页目录表物理地址 (CR3)

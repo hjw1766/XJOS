@@ -12,6 +12,7 @@
 #include <xjos/arena.h>
 #include <fs/fs.h>
 #include <xjos/errno.h>
+#include <xjos/timer.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
@@ -68,12 +69,6 @@ static task_t *get_free_task() {
     return NULL;
 }
 
-static void task_timeout(task_t *task) {
-    bool intr = interrupt_disable();
-    task_unblock(task, -ETIME);
-    set_interrupt_state(intr);
-}
-
 // ----------------------------------------------------------------------------
 // 调度状态控制 (Sleep, Wakeup, Block)
 // ----------------------------------------------------------------------------
@@ -85,49 +80,8 @@ void task_sleep(u32 ms) {
     // 睡眠必须在关中断下操作，防止竞态
     assert(!get_interrupt_state());
     
-    u32 ticks = ms / jiffy;
-    if (ticks == 0) ticks = 1;
-
-    task_t *current = running_task();
-    current->wakeup_time = jiffies + ticks;
-    current->state = TASK_SLEEPING;
-
-    // 插入有序链表 (按唤醒时间排序)
-    bool inserted = false;
-    task_t *pos;
-    list_for_each_entry(pos, &sleep_list, node) {
-        if (time_before(current->wakeup_time, pos->wakeup_time)) {
-            list_insert_before(&pos->node, &current->node);
-            inserted = true;
-            break;
-        }
-    }
-    if (!inserted) list_pushback(&sleep_list, &current->node);
-
-    schedule();
-}
-
-// 系统时钟中断会调用此函数检查唤醒
-bool task_wakeup() {
-    assert(!get_interrupt_state());
-    bool woken = false;
-    list_node_t *ptr = sleep_list.head.next;
-    
-    while (ptr != &sleep_list.head) {
-        list_node_t *next = ptr->next;
-        task_t *task = list_entry(ptr, task_t, node);
-
-        if (time_after_eq(jiffies, task->wakeup_time)) {
-            task_unblock(task, EOK);
-            task->wakeup_time = 0;
-            woken = true;
-            ptr = next;
-        } else {
-            // 因为是有序链表，如果当前这个没到时间，后面的肯定也没到
-            break;
-        }
-    }
-    return woken;
+    task_t *task = running_task();
+    task_block(task, &sleep_list, TASK_SLEEPING, ms);
 }
 
 int task_block(task_t *task, list_t *blist, task_state_t state, int timeout_ms) {
@@ -135,6 +89,11 @@ int task_block(task_t *task, list_t *blist, task_state_t state, int timeout_ms) 
     if (!blist) blist = &block_list;
     list_push(blist, &task->node);
     task->state = state;
+
+    // 超时逻辑
+    if (timeout_ms > 0) {
+        task->block_timer = timer_add(timeout_ms, NULL, NULL, task);
+    }
     
     if (task == running_task()) schedule();
 
@@ -144,6 +103,15 @@ int task_block(task_t *task, list_t *blist, task_state_t state, int timeout_ms) 
 void task_unblock(task_t *task, int reason) {
     assert(!get_interrupt_state());
     if (task->node.next) list_remove(&task->node);
+
+    if (task->block_timer) {
+        timer_t *t = task->block_timer;
+        task->block_timer = NULL;
+
+        list_remove(&t->node);
+        kfree(t);
+    }
+
     task->status = reason;
     task->state = TASK_READY;
 
@@ -354,6 +322,8 @@ void task_exit(int status) {
     task_t *task = running_task();
     task->state = TASK_DIED;
     task->status = status;
+
+    timer_remove(task);
 
     // 1. 释放页表资源
     free_pde();

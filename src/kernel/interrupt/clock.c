@@ -5,6 +5,8 @@
 #include <xjos/task.h>
 #include <xjos/sched.h>
 #include <xjos/xjos.h>
+#include <xjos/timer.h>
+
 extern void time_init();
 
 
@@ -22,33 +24,29 @@ extern void time_init();
 #define SPEAKER_REG 0x61
 #define BEEP_HZ 440
 #define BEEP_COUNTER (OSCILLATOR / BEEP_HZ)
-
+#define BEEP_MS 100
 
 
 u32 volatile jiffies = 0;
 u32 jiffy = JIFFY;
 
-u32 volatile beeping = 0;
+bool volatile beeping = 0;
 
 // (extern declare from task.c idle_task and cfs_task_count)
 extern task_t *idle_task;
-extern bool task_wakeup(); // (!!!!) NEW
 
 
 void start_beep() {
     if (!beeping) {
         // set bit 0 and bit 1
         outb(SPEAKER_REG, inb(SPEAKER_REG) | 3);
-    }
 
-    beeping = jiffies + 5;  // 50ms, once jiffies 10ms
-}
+        beeping = true;
 
+        task_sleep(BEEP_MS);
 
-void stop_beep() {
-    if (beeping && beeping < jiffies) {
         outb(SPEAKER_REG, inb(SPEAKER_REG) & 0xfc);
-        beeping = 0;
+        beeping = false;
     }
 }
 
@@ -62,8 +60,8 @@ void clock_handler(int vector) {
 
     jiffies++;
 
-    // 1. wakeup sleeping tasks
-    bool woken_up = task_wakeup(); // (!!!!) NEW
+    // 1. 唤醒到期的睡眠任务
+    bool woken_up = timer_wakeup();
     
     u32 cfs_task_count = sched_get_task_count();
     

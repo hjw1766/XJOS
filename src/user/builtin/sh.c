@@ -281,9 +281,14 @@ static void builtin_logo(int argc, char *argv[]) {
 static void builtin_test(int argc, char *argv[]) {
     (void)argc;
     (void)argv;
-    char *ptr = (char *)0xB8000; // video memory
 
-    *ptr = 'X';
+    int counter = 1;
+
+    while (counter <= 5) {
+        printf("Test %d\n", counter);
+        sleep(1000);
+        counter++;
+    }
 }
 
 static void builtin_help(int argc, char *argv[]) {

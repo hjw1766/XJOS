@@ -4,6 +4,7 @@
 #include <xjos/stdlib.h>
 #include <xjos/assert.h>
 
+#define BUF_COUNT 4
 
 extern u32 free_pages;
 static arena_descriptor_t descriptors[DESC_COUNT];
@@ -15,6 +16,7 @@ void arena_init() {
         arena_descriptor_t *desc = &descriptors[i];
         desc->block_size = block_size;
         desc->total_block = (PAGE_SIZE - sizeof(arena_t)) / block_size;
+        desc->page_count = 0;
         list_init(&desc->free_list);
         block_size <<= 1;    // 16 32 64...1024
     }
@@ -70,6 +72,7 @@ void *kmalloc(size_t size) {
         arena = (arena_t *)alloc_kpage(1);
         memset(arena, 0, PAGE_SIZE);
 
+        desc->page_count++;
         arena->desc = desc;                     // use which descriptor
         arena->large = false;                   // small arena
         arena->count = desc->total_block;       // total number of blocks
@@ -115,7 +118,7 @@ void kfree(void *ptr) {
     list_push(&arena->desc->free_list, block);
     arena->count++;
 
-    if (arena->count == arena->desc->total_block) {
+    if (arena->count == arena->desc->total_block && arena->desc->page_count > BUF_COUNT) {
         for (size_t i = 0; i < arena->desc->total_block; i++) {
             block = (block_t *)get_arena_block(arena, i);
             assert(list_search(&arena->desc->free_list, block));
@@ -123,5 +126,7 @@ void kfree(void *ptr) {
             assert(!list_search(&arena->desc->free_list, block));
         }
         free_kpage((u32)arena, 1);
+        arena->desc->page_count--;
+        assert(arena->desc->page_count >= BUF_COUNT);
     }
 }

@@ -561,9 +561,10 @@ int console_write(console_t *con, char *buf, u32 count) {
             case STATE_QUE:
                 memset(con->args, 0, sizeof(con->args));
                 con->argc = 0;
-                con->ques = (ch == '?');
                 con->state = STATE_ARG;
-                break;
+                con->ques = (ch == '?');
+                if (con->ques)
+                    break;
             case STATE_ARG:
                 if (!state_arg(con, ch))
                     break;

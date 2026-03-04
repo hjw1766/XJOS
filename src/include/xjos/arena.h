@@ -12,6 +12,7 @@ typedef list_node_t block_t;    // memory block
 typedef struct {
     u32 total_block;             // total number of blocks
     u32 block_size;              // size of each block
+    u32 page_count;             // free page count for this block size
     list_t free_list;             // free block list
 }arena_descriptor_t;
 

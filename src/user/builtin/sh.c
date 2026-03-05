@@ -66,22 +66,22 @@ void clear() {
 
 }
 
-static pid_t spawn_process(char *filename, char *argv[], fd_t infd, fd_t outfd, fd_t errfd);
+static pid_t spawn_process(char *filename, char *argv[], fd_t infd, fd_t outfd, fd_t errfd, pid_t *pgid);
 
 // -------- builtin functions --------
-static pid_t lookup_and_spawn(char **cmd_argv, fd_t infd, fd_t outfd, fd_t errfd) {
+static pid_t lookup_and_spawn(char **cmd_argv, fd_t infd, fd_t outfd, fd_t errfd, pid_t *pgid) {
     char *cmd_name = cmd_argv[0];
 
     stat_t statbuf;
 
     if (strchr(cmd_name, '/')) {
         if (stat(cmd_name, &statbuf) != EOF) {
-            return spawn_process(cmd_name, cmd_argv, infd, outfd, errfd);
+            return spawn_process(cmd_name, cmd_argv, infd, outfd, errfd, pgid);
         }
     } else {
         sprintf(buf, "/bin/%s", cmd_name);
         if (stat(buf, &statbuf) != EOF) {
-            return spawn_process(buf, cmd_argv, infd, outfd, errfd);
+            return spawn_process(buf, cmd_argv, infd, outfd, errfd, pgid);
         }
     }
 
@@ -226,17 +226,25 @@ static void close_redirect_fds(fd_t dupfd[3]) {
     }
 }
 
-static pid_t spawn_process(char *filename, char *argv[], fd_t infd, fd_t outfd, fd_t errfd) {
+static pid_t spawn_process(char *filename, char *argv[], fd_t infd, fd_t outfd, fd_t errfd, pid_t *pgid) {
     int status;
     pid_t pid = fork();
 
     if (pid > 0) {
+        if (*pgid == 0)
+            *pgid = pid; // PID及组长
+
+        setpgid(pid, *pgid); // 立即设置进程组
         if (infd != EOF && infd != STDIN_FILENO) close(infd);
         if (outfd != EOF && outfd != STDOUT_FILENO) close(outfd);
         if (errfd != EOF && errfd != STDERR_FILENO) close(errfd);
 
         return pid;
     }
+
+    if (*pgid == 0)
+        *pgid = getpid(); // 子进程也是组长
+    setpgid(0, *pgid); // 设置子进程的进程组
 
     if (infd != EOF && infd != STDIN_FILENO) {
         (void)dup2(infd, STDIN_FILENO);
@@ -371,6 +379,8 @@ static void execute(int argc, char *argv[]) {
     int pids[MAX_ARG_NR];
     int pid_count = 0;
 
+    pid_t pgid = 0;
+
     for (int i = 0; i <= argc; i++) {
         if (!argv[i]) continue;
 
@@ -384,8 +394,8 @@ static void execute(int argc, char *argv[]) {
             }
 
             // in -> input_fd, out -> pipefd[1]
-            pid_t pid = lookup_and_spawn(current_cmd, input_fd, pipefd[1], error_fd);
-            if (pid > 0) pids[pid_count++] = pid;
+                pid_t pid = lookup_and_spawn(current_cmd, input_fd, pipefd[1], error_fd, &pgid);
+                if (pid > 0) pids[pid_count++] = pid;
 
             input_fd = pipefd[0];
 
@@ -398,7 +408,7 @@ static void execute(int argc, char *argv[]) {
     fd_t final_out = (dupfd[1] == EOF) ? STDOUT_FILENO : dupfd[1];
 
     if (current_cmd[0] != NULL) {
-        pid_t pid = lookup_and_spawn(current_cmd, input_fd, final_out, error_fd);
+        pid_t pid = lookup_and_spawn(current_cmd, input_fd, final_out, error_fd, &pgid);
         if (pid > 0) pids[pid_count++] = pid;
     }
 
@@ -466,6 +476,8 @@ int cmd_sh(int argc, char **argv, char **envp) {
 
     current_envp = envp ? envp : default_envp;
 
+    setsid(); // create a new session, make this process the session leader
+
     memset(cmd, 0, sizeof(cmd));
     getcwd(cwd, MAX_PATH_LEN);
 
@@ -479,34 +491,7 @@ int cmd_sh(int argc, char **argv, char **envp) {
 
         int cargc = cmd_parse(cmd, args, ' ');
         if (cargc > 0) {
-
-            // handle built-in commands (cd, exit) in the shell process itself
-            if (strcmp(args[0], "cd") == 0 || strcmp(args[0], "exit") == 0) {
-                execute(cargc, args);
-
-                if (strcmp(args[0], "exit") == 0) {
-                    break;
-                }
-                continue;
-            }
-
-            pid_t pid = fork();
-
-            if (pid == 0) {
-                execute(cargc, args);
-                exit(0);
-
-                while (true);
-            } else if (pid > 0) {
-                int32 status;
-                waitpid(pid, &status);
-
-                if (status == -1) {
-                    printf("Segmentation fault (core dumped)\n");
-                }
-            } else {
-                printf("sh: fork failed\n");
-            }
+            execute(cargc, args);
         } else {
             printf("sh: parse command failed\n");
         }

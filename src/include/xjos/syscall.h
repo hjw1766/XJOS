@@ -14,6 +14,14 @@ pid_t waitpid(pid_t pid, int32 *status);
 pid_t getpid();
 pid_t getppid();
 
+/* process group */
+pid_t setpgrp();
+int setpgid(int pid, int pgid);
+
+pid_t getpgrp();
+/* session */
+pid_t setsid();
+
 pid_t fork();
 
 void exit(int status);

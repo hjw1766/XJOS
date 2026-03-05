@@ -16,7 +16,6 @@
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
-#define NR_TASKS 64
 
 extern u32 volatile jiffies;
 extern u32 jiffy;
@@ -27,7 +26,7 @@ extern file_t file_table[];
 extern void task_switch(task_t *next);
 extern void interrupt_exit();
 
-static task_t *tasks_table[NR_TASKS];
+task_t *tasks_table[TASK_NR];   // 任务表
 task_t *idle_task;
 
 static list_t block_list;
@@ -51,7 +50,7 @@ task_t *running_task() {
 
 // 寻找空闲任务槽
 static task_t *get_free_task() {
-    for (int i = 0; i < NR_TASKS; i++) {
+    for (int i = 0; i < TASK_NR; i++) {
         if (tasks_table[i] == NULL) {
             // 分配 1 页 (4KB) 用于 PCB + 内核栈
             u32 page = alloc_kpage(1);
@@ -127,6 +126,10 @@ void task_yield() {
     bool intr = interrupt_disable();
     schedule();
     set_interrupt_state(intr);
+}
+
+bool _inline task_leader(task_t *task) {
+    return task->sid == task->pid;
 }
 
 void task_activate(task_t *task) {
@@ -259,7 +262,9 @@ static task_t *task_create(target_t target, const char *name, int nice, u32 uid)
 
     strlcpy(task->name, name, TASK_NAME_LEN);
     task->uid = uid;
-    task->gid = 0;  
+    task->gid = 0;
+    task->pgid = 0;
+    task->sid = 0;  
     task->state = TASK_READY;
     task->magic = XJOS_MAGIC; 
     
@@ -322,6 +327,10 @@ void task_exit(int status) {
     task_t *task = running_task();
     task->state = TASK_DIED;
     task->status = status;
+
+    if (task_leader(task)) {
+        // todo: kill session
+    }
 
     timer_remove(task);
 

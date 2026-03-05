@@ -658,8 +658,8 @@ void page_fault(u32 vector,
     // if user process access kernel memory, panic
     if (vaddr < USER_EXEC_ADDR || vaddr >= USER_STACK_TOP) {
         assert(task->uid);
-        // printk("Segmentation Fault: Invalid memory access at 0x%p by task %s (pid %d)\n",
-        //     vaddr, task->name, task->pid);
+        printk("Segmentation Fault: Invalid memory access at 0x%p by task %s\n",
+            vaddr, task->name);
 
         task_exit(-1);
     }

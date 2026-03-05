@@ -114,6 +114,26 @@ pid_t getppid() {
 }
 
 
+int setpgid(int pid, int pgid) {
+    return _syscall2(SYS_NR_SETPGID, pid, pgid);
+}
+
+
+pid_t setpgrp() {
+    setpgid(0, 0);
+}
+
+
+int getpgrp() {
+    return _syscall0(SYS_NR_GETPGID);
+}
+
+
+int setsid() {
+    return _syscall0(SYS_NR_SETSID);
+}
+
+
 pid_t fork() {
     return _syscall0(SYS_NR_FORK);
 }

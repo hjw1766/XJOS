@@ -99,6 +99,10 @@ extern int sys_brk();
 extern int sys_mmap();
 extern int sys_munmap();
 
+extern int sys_setpgid();
+extern int sys_setsid();
+extern int sys_getpgrp();
+
 extern int sys_mkfs();
 
 void syscall_init() {
@@ -114,6 +118,9 @@ void syscall_init() {
     syscall_table[SYS_NR_WAITPID] = task_waitpid;
     syscall_table[SYS_NR_GETPID] = sys_getpid;
     syscall_table[SYS_NR_GETPPID] = sys_getppid;
+    syscall_table[SYS_NR_SETPGID] = sys_setpgid;
+    syscall_table[SYS_NR_GETPGID] = sys_getpgrp;
+    syscall_table[SYS_NR_SETSID] = sys_setsid;
 
     syscall_table[SYS_NR_FORK] = task_fork;
 

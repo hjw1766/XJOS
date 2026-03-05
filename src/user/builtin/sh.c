@@ -5,6 +5,7 @@
 #include <xjos/assert.h>
 #include <xjos/fcntl.h>
 #include <fs/stat.h>
+#include <xjos/tty.h>
 
 
 #define MAX_CMD_LEN 256
@@ -235,6 +236,8 @@ static pid_t spawn_process(char *filename, char *argv[], fd_t infd, fd_t outfd, 
             *pgid = pid; // PID及组长
 
         setpgid(pid, *pgid); // 立即设置进程组
+
+        ioctl(STDIN_FILENO, TIOCSPGRP, *pgid); // 设置控制终端的前台进程组为这个组
         if (infd != EOF && infd != STDIN_FILENO) close(infd);
         if (outfd != EOF && outfd != STDOUT_FILENO) close(outfd);
         if (errfd != EOF && errfd != STDERR_FILENO) close(errfd);
@@ -245,6 +248,9 @@ static pid_t spawn_process(char *filename, char *argv[], fd_t infd, fd_t outfd, 
     if (*pgid == 0)
         *pgid = getpid(); // 子进程也是组长
     setpgid(0, *pgid); // 设置子进程的进程组
+
+    // 子进程尝试接管
+    ioctl(STDIN_FILENO, TIOCSPGRP, *pgid);
 
     if (infd != EOF && infd != STDIN_FILENO) {
         (void)dup2(infd, STDIN_FILENO);
@@ -416,7 +422,12 @@ static void execute(int argc, char *argv[]) {
     for (int i = 0; i < pid_count; i++) {
         int status;
         waitpid(pids[i], &status);
+
+        // todo: 
+        // check status, print message if process terminated abnormally
     }
+
+    ioctl(STDIN_FILENO, TIOCSPGRP, getpid()); // 恢复控制终端的前台进程组为shell
 }
 
 static void readline(char *buf, int count) {
@@ -477,6 +488,8 @@ int cmd_sh(int argc, char **argv, char **envp) {
     current_envp = envp ? envp : default_envp;
 
     setsid(); // create a new session, make this process the session leader
+
+    ioctl(STDIN_FILENO, TIOCSPGRP, getpid()); // set controlling terminal's foreground process group to this session
 
     memset(cmd, 0, sizeof(cmd));
     getcwd(cwd, MAX_PATH_LEN);

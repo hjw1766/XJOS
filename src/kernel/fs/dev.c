@@ -31,6 +31,9 @@ void dev_init() {
     device = device_find(DEV_KEYBOARD, 0);
     sys_mknod("/dev/keyboard", IFCHR | 0400, device->dev);
 
+    device = device_find(DEV_TTY, 0);
+    sys_mknod("/dev/tty", IFCHR | 0600, device->dev);
+
     char name[32];
 
     for (size_t i = 0; true; i++) {
@@ -67,9 +70,9 @@ void dev_init() {
         sys_mknod(name, IFBLK | 0600, device->dev);
     }
 
-    sys_link("/dev/console", "/dev/stdout");
-    sys_link("/dev/console", "/dev/stderr");
-    sys_link("/dev/keyboard", "/dev/stdin");
+    sys_link("/dev/tty", "/dev/stdout");
+    sys_link("/dev/tty", "/dev/stderr");
+    sys_link("/dev/tty", "/dev/stdin");
 
     file_t *file;
     inode_t *inode;

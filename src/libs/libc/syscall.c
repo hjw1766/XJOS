@@ -134,6 +134,21 @@ int setsid() {
 }
 
 
+int stty() {
+    return _syscall0(SYS_NR_STTY);
+}
+
+
+int gtty() {
+    return _syscall0(SYS_NR_GTTY);
+}
+
+
+int ioctl(fd_t fd, int cmd, int args) {
+    return _syscall3(SYS_NR_IOCTL, fd, cmd, args);
+}
+
+
 pid_t fork() {
     return _syscall0(SYS_NR_FORK);
 }

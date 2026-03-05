@@ -13,6 +13,8 @@
 #include <fs/fs.h>
 #include <xjos/errno.h>
 #include <xjos/timer.h>
+#include <drivers/device.h>
+#include <xjos/tty.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
@@ -330,6 +332,12 @@ void task_exit(int status) {
 
     if (task_leader(task)) {
         // todo: kill session
+    }
+
+    if (task_leader(task) && task->tty > 0) {
+        device_t *device = device_get(task->tty);
+        tty_t *tty = (tty_t *)device->ptr;
+        tty->pgid = 0; // 解除终端关联
     }
 
     timer_remove(task);

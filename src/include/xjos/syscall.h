@@ -22,6 +22,11 @@ pid_t getpgrp();
 /* session */
 pid_t setsid();
 
+int stty();
+int gtty();
+
+int ioctl(fd_t fd, int cmd, int args);
+
 pid_t fork();
 
 void exit(int status);

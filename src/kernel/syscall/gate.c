@@ -103,6 +103,10 @@ extern int sys_setpgid();
 extern int sys_setsid();
 extern int sys_getpgrp();
 
+extern int sys_stty();
+extern int sys_gtty();
+extern int sys_ioctl();
+
 extern int sys_mkfs();
 
 void syscall_init() {
@@ -121,6 +125,10 @@ void syscall_init() {
     syscall_table[SYS_NR_SETPGID] = sys_setpgid;
     syscall_table[SYS_NR_GETPGID] = sys_getpgrp;
     syscall_table[SYS_NR_SETSID] = sys_setsid;
+
+    syscall_table[SYS_NR_STTY] = sys_stty;
+    syscall_table[SYS_NR_GTTY] = sys_gtty;
+    syscall_table[SYS_NR_IOCTL] = sys_ioctl;
 
     syscall_table[SYS_NR_FORK] = task_fork;
 

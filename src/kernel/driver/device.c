@@ -10,7 +10,6 @@
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
-#define DEVICE_NR 64
 
 
 static device_t devices[DEVICE_NR];

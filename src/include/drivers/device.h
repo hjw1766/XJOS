@@ -5,6 +5,7 @@
 #include <xjos/types.h>
 #include <xjos/list.h>
 
+#define DEVICE_NR 64
 #define NAMELEN 16
 
 // device type
@@ -19,6 +20,7 @@ enum device_subtype_t {
     DEV_CONSOLE = 1,    // console
     DEV_KEYBOARD,       // keyboard
     DEV_SERIAL,         // serial port
+    DEV_TTY,            // tty   
     DEV_IDE_DISK,       // IDE disk
     DEV_IDE_PART,        // IDE disk part
     DEV_RAMDISK,      // ramdisk

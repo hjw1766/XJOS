@@ -69,6 +69,7 @@ typedef struct task_t {
     pid_t ppid;              // 父进程 ID
     pid_t pgid;              // 进程组 ID
     pid_t sid;               // 会话 ID
+    dev_t tty;              // 关联的终端设备号
     task_state_t state;      // 当前状态
     u32 uid;                 // 用户 ID
     u32 gid;                 // 组 ID

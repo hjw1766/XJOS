@@ -272,6 +272,7 @@ static void set_leds() {
     keyboard_ack();
 }
 
+extern int tty_rx_notify();
 
 void keyboard_handler(int vector) {
     assert(vector == 0x21);
@@ -343,6 +344,10 @@ void keyboard_handler(int vector) {
     if (ch == INV)
         return;
 
+    // 通知 TTY 任务有新输入了，如果 TTY 处理了这个输入（比如 Ctrl+C），就不会把它放到 FIFO 里了
+    if (tty_rx_notify(&ch, ctrl_state, shift_state, alt_state) > 0)
+        return;
+
     fifo_put(&fifo, ch);
     if (waiter != NULL) {
         task_unblock(waiter, EOK);
@@ -357,7 +362,7 @@ u32 keyboard_read(void *dev, char *buffer, u32 count) {
     while (nr < count) {
         while (fifo_empty(&fifo)) {
             waiter = running_task();
-            task_block(waiter, NULL, TASK_WAITING, TIMELESS);
+            task_block(waiter, NULL, TASK_BLOCKED, TIMELESS);
         }
         buffer[nr++] = fifo_get(&fifo);
     }

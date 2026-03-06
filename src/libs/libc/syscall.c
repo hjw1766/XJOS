@@ -1,4 +1,5 @@
 #include <xjos/syscall.h>
+#include <xjos/signal.h>
 
 
 static _inline u32 _syscall0(u32 nr) {
@@ -206,6 +207,10 @@ int execve(char *filename, char *argv[], char *envp[]) {
     return _syscall3(SYS_NR_EXECVE, (u32)filename, (u32)argv, (u32)envp);
 }
 
+int kill(pid_t pid, int sig) {
+    return _syscall2(SYS_NR_KILL, pid, sig);
+}
+
 char *getcwd(char *buf, size_t size) {
     return (char *)_syscall2(SYS_NR_GETCWD, (u32)buf, (u32)size);
 }
@@ -288,4 +293,22 @@ int fstat(fd_t fd, stat_t *statbuf) {
 
 int mkfs(char *devname, int icount) {
     return _syscall2(SYS_NR_MKFS, (u32)devname, (u32)icount);
+}
+
+int sgetmask() {
+    return _syscall0(SYS_NR_SGETMASK);
+}
+
+int ssetmask(int newmask) {
+    return _syscall1(SYS_NR_SSETMASK, (u32)newmask);
+}
+
+extern void restorer();
+
+int signal(int sig, int handler) {
+    return _syscall3(SYS_NR_SIGNAL, (u32)sig, (u32)handler, (u32)restorer);
+}
+
+int sigaction(int sig, sigaction_t *act, sigaction_t *oldact) {
+    return _syscall3(SYS_NR_SIGACTION, (u32)sig, (u32)act, (u32)oldact);
 }

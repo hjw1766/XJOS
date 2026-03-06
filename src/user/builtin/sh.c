@@ -6,6 +6,7 @@
 #include <xjos/fcntl.h>
 #include <fs/stat.h>
 #include <xjos/tty.h>
+#include <xjos/signal.h>
 
 
 #define MAX_CMD_LEN 256
@@ -43,6 +44,8 @@ static const char *logo[] = {
         " /  \\ |_| | |_| |___) |",
         "/_/\\_\\\\___/ \\___/|____/ "
 };
+
+static volatile bool interrupt = false;
 
 // ---------- helper function ----------
 
@@ -265,6 +268,8 @@ static pid_t spawn_process(char *filename, char *argv[], fd_t infd, fd_t outfd, 
         close(errfd);
     }
 
+    signal(SIGINT, (int)SIG_DFL); // 恢复默认信号处理，允许子进程被 Ctrl+C 中断
+
     int i = execve(filename, argv, current_envp);
     printf("sh: command not found or execution failed: %s\n", filename);
     exit(i);    // hlt if execve failed
@@ -299,6 +304,7 @@ static void builtin_test(int argc, char *argv[]) {
     int counter = 1;
 
     while (counter <= 5) {
+        if (interrupt) break; // 允许通过 Ctrl+C 中断测试命令
         printf("Test %d\n", counter);
         sleep(1000);
         counter++;
@@ -439,6 +445,8 @@ static void readline(char *buf, int count) {
 
         char ch = ptr[idx];
 
+        if (ch == '\0') continue;   // ignore null char
+
         if (ch == '\n' || ch == '\r') {
             ptr[idx] = '\0';
             write(STDOUT_FILENO, "\n", 1);
@@ -481,11 +489,18 @@ static int cmd_parse(char *cmd, char *argv[], char token) {
     return argc;
 }
 
+static int signal_handler(int sig) {
+    signal(SIGINT, (int)signal_handler); // 重新注册信号处理函数
+    interrupt = true;
+}
+
 int cmd_sh(int argc, char **argv, char **envp) {
     (void)argc;
     (void)argv;
 
     current_envp = envp ? envp : default_envp;
+
+    signal(SIGINT, (int)signal_handler); // 注册 SIGINT 信号处理函数
 
     setsid(); // create a new session, make this process the session leader
 
@@ -499,6 +514,11 @@ int cmd_sh(int argc, char **argv, char **envp) {
     while (true) {
         print_prompt();
         readline(cmd, sizeof(cmd));
+        if (interrupt) {
+            // 按下 Ctrl+C 后，清空当前输入的命令并重新显示提示符
+            interrupt = false;
+            continue;
+        }
 
         if (cmd[0] == 0) continue;
 

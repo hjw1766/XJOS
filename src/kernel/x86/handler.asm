@@ -2,6 +2,7 @@
 ; Interrupt handler
 
 extern handler_table
+extern task_signal
 
 section .text
 
@@ -44,6 +45,8 @@ interrupt_entry:
  interrupt_exit:   
 
     add esp, 4
+
+    call task_signal
 
     popa
     pop gs

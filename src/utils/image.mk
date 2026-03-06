@@ -16,11 +16,11 @@ $(BUILD_DIR)/master.img: $(BUILD_DIR)/boot/boot.bin \
 # write loader.bin
 	dd if=$(BUILD_DIR)/boot/loader.bin of=$@ bs=512 count=4 seek=2 conv=notrunc
 
-# test system.bin < 100k
-	test -n "$$(find $(BUILD_DIR)/system.bin -size -100k)"
+# test system.bin < 128k
+	test -n "$$(find $(BUILD_DIR)/system.bin -size -128k)"
 
 # write system.bin
-	dd if=$(BUILD_DIR)/system.bin of=$@ bs=512 count=200 seek=10 conv=notrunc
+	dd if=$(BUILD_DIR)/system.bin of=$@ bs=512 count=250 seek=10 conv=notrunc
 
 # part
 	sfdisk $@ < $(SRC_DIR)/utils/master.sfdisk

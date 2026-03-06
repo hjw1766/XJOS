@@ -78,6 +78,9 @@ int stat(char *filename, stat_t *statbuf);
 int fstat(fd_t fd, stat_t *statbuf);
 
 int mkfs(char *devname, int icount);
+
+int kill(pid_t pid, int sig);
+
 #endif
 
 #endif /* XJOS_SYSCALL_H */

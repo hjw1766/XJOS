@@ -70,6 +70,7 @@ extern int sys_lseek();
 extern int sys_readdir();
 
 extern int sys_execve();
+extern int sys_kill();
 
 extern int sys_chdir();
 extern int sys_chroot();
@@ -107,6 +108,11 @@ extern int sys_stty();
 extern int sys_gtty();
 extern int sys_ioctl();
 
+extern int sys_signal();
+extern int sys_sgetmask();
+extern int sys_ssetmask();
+extern int sys_sigaction();
+
 extern int sys_mkfs();
 
 void syscall_init() {
@@ -125,6 +131,8 @@ void syscall_init() {
     syscall_table[SYS_NR_SETPGID] = sys_setpgid;
     syscall_table[SYS_NR_GETPGID] = sys_getpgrp;
     syscall_table[SYS_NR_SETSID] = sys_setsid;
+
+    syscall_table[SYS_NR_KILL] = sys_kill;
 
     syscall_table[SYS_NR_STTY] = sys_stty;
     syscall_table[SYS_NR_GTTY] = sys_gtty;
@@ -177,4 +185,9 @@ void syscall_init() {
     syscall_table[SYS_NR_UMOUNT] = sys_umount;
 
     syscall_table[SYS_NR_MKFS] = sys_mkfs;
+
+    syscall_table[SYS_NR_SIGNAL] = sys_signal;
+    syscall_table[SYS_NR_SGETMASK] = sys_sgetmask;
+    syscall_table[SYS_NR_SSETMASK] = sys_ssetmask;
+    syscall_table[SYS_NR_SIGACTION] = sys_sigaction;
 }

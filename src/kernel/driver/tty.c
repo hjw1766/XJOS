@@ -10,7 +10,29 @@
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
+extern task_t *tasks_table[TASK_NR];
+extern int sys_kill();
+
 static tty_t typewriter;
+
+
+
+// 向前台进程组发送 SIGINT 信号
+int tty_intr() {
+    tty_t *tty = &typewriter;
+    if (!tty->pgid)
+        return 0;
+
+    for (size_t i = 0; i < TASK_NR; i++) {
+        task_t *task = tasks_table[i];
+        if (!task) continue;
+        if (task->pgid != tty->pgid) continue;
+
+        sys_kill(task->pid, SIGINT);
+    }
+
+    return 0;
+}
 
 int tty_rx_notify(char *ch, bool ctrl, bool shift, bool alt) {
     switch (*ch) {
@@ -29,7 +51,9 @@ int tty_rx_notify(char *ch, bool ctrl, bool shift, bool alt) {
         case 'c':
         case 'C':
             LOGK("CTRL + C Pressed, sending SIGINT to process group %d\n", tty->pgid);
-            break;
+            tty_intr();
+            *ch = '\0'; // 将输入字符置为0，表示已处理
+            return 0;
         case 'l':
         case 'L':
             device_write(tty->wdev, "\x1b[2J\x1b[0;0H\r", 12, 0, 0);

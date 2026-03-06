@@ -70,6 +70,16 @@ static task_t *get_free_task() {
     return NULL;
 }
 
+// pid -> task
+task_t *get_task(pid_t pid) {
+    for (size_t i = 0; i < TASK_NR; i++) {
+        if (tasks_table[i] && tasks_table[i]->pid == pid) {
+            return tasks_table[i];
+        }
+    }
+    return NULL;
+}
+
 // ----------------------------------------------------------------------------
 // 调度状态控制 (Sleep, Wakeup, Block)
 // ----------------------------------------------------------------------------
@@ -258,6 +268,45 @@ pid_t task_fork() {
     return child->pid; 
 }
 
+// 如果是会话领导者，杀死整个会话
+static void task_kill_session(task_t *task) {
+    if (!task_leader(task)) return;
+
+    for (size_t i = 0; i < TASK_NR; i++) {
+        task_t *child = tasks_table[i];
+        if (!child) continue;
+
+        if (task == child || task->sid != child->sid) continue;
+
+        child->signal |= SIGMASK(SIGHUP);
+    }
+}
+
+static void task_free_tty(task_t *task) {
+    if (task_leader(task) && task->tty > 0) {
+        device_t *device = device_get(task->tty);
+        tty_t *tty = (tty_t *)device->ptr;
+        tty->pgid = 0; // 解除终端关联
+    }
+}
+
+// 子进程退出，通知父进程
+static void task_notify_parent(task_t *task) {
+    if (!task->ppid)
+        return;
+    for (size_t i = 0; i < TASK_NR; i++) {
+        task_t *parent = tasks_table[i];
+        if (!parent) continue;
+        if (parent->pid != task->ppid) continue;
+
+        // notify parent
+        parent->signal |= SIGMASK(SIGCHLD);
+        return;
+    }
+
+    panic("Parent process not found for PID %d", task->pid);
+}
+
 // 创建内核线程的辅助函数
 static task_t *task_create(target_t target, const char *name, int nice, u32 uid) {
     task_t *task = get_free_task();
@@ -298,6 +347,17 @@ static task_t *task_create(target_t target, const char *name, int nice, u32 uid)
     task->weight = sched_nice_to_weight(nice);
     task->vruntime = sched_get_min_vruntime();
 
+    // init signal
+    task->signal = 0;
+    task->blocked = 0;
+    for (size_t i = 0; i < MAXSIG; i++) {
+        sigaction_t *action = &task->actions[i];
+        action->flags = 0;
+        action->mask = 0;
+        action->handler = SIG_DFL;
+        action->restorer = NULL;
+    }
+
     list_init(&task->children);
     list_node_init(&task->sibling);
     list_node_init(&task->node);
@@ -330,15 +390,9 @@ void task_exit(int status) {
     task->state = TASK_DIED;
     task->status = status;
 
-    if (task_leader(task)) {
-        // todo: kill session
-    }
-
-    if (task_leader(task) && task->tty > 0) {
-        device_t *device = device_get(task->tty);
-        tty_t *tty = (tty_t *)device->ptr;
-        tty->pgid = 0; // 解除终端关联
-    }
+    task_kill_session(task);
+    task_notify_parent(task);
+    task_free_tty(task);
 
     timer_remove(task);
 

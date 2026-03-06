@@ -357,17 +357,29 @@ void keyboard_handler(int vector) {
 
 
 u32 keyboard_read(void *dev, char *buffer, u32 count) {
-    spin_lock(&lock);   // spin lock
     int nr = 0;
     while (nr < count) {
+        bool intr = interrupt_disable();
+
         while (fifo_empty(&fifo)) {
             waiter = running_task();
             task_block(waiter, NULL, TASK_BLOCKED, TIMELESS);
+
+            task_t *current = running_task();
+            // check signal
+            if (current->signal & ~current->blocked) {
+                set_interrupt_state(intr);
+                return nr > 0 ? nr : -EINTR; // if already read some data, return the count, otherwise return -EINTR
+            }
         }
         buffer[nr++] = fifo_get(&fifo);
+
+        set_interrupt_state(intr);
+
+        if (fifo_empty(&fifo))
+            break; // no more data, return what we have read so far
     }
-    spin_unlock(&lock); // spin unlock
-    return count;
+    return nr;
 }
 
 

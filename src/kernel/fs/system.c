@@ -44,6 +44,6 @@ int sys_setsid() {
     task_t *task = running_task();
     if (task_leader(task))
         return -EPERM; // 进程组领导者不能创建新的会话
-    task->sid = task->pgid = task->gid; // 将会话 ID 和进程组 ID 设置为当前进程的 PID
+    task->sid = task->pgid = task->pid; // 将会话 ID 和进程组 ID 设置为当前进程的 PID
     return task->sid;
 }

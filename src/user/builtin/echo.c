@@ -10,13 +10,20 @@
 
 int cmd_echo(int argc, char **argv, char **envp) {
     (void)envp;
-    for (size_t i = 1; i < argc; i++) {
+    /* for (size_t i = 1; i < argc; i++) {
         printf("%s", argv[i]);
         if (i < argc - 1) {
             printf(" ");
         }
     }
-    printf("\n");
+    printf("\n"); */
+
+    int cnt = 1;
+    while (cnt) {
+        printf("test %d\n", cnt);
+        sleep(1000);
+        cnt++;
+    }
     return 0;
 }
 

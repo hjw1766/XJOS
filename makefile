@@ -7,7 +7,7 @@ SRC_DIR := src
 DEBUG ?= 0
 
 # Busybox-style applets (kept in sync with src/utils/image.mk)
-BUSYBOX_APPLETS := ls cat echo env pwd clear date mkdir rmdir rm mount umount mkfs sh dup
+BUSYBOX_APPLETS := ls cat echo env pwd clear date mkdir rmdir rm mount umount mkfs sh dup kill
 
 
 # Kernel entry point address
@@ -88,6 +88,7 @@ LIB_OBJS := \
 	$(BUILD_DIR)/libs/libc/time.o \
 	$(BUILD_DIR)/libs/libc/printf.o \
 	$(BUILD_DIR)/libs/libc/syscall.o \
+	$(BUILD_DIR)/libs/libc/restorer.o \
 	$(BUILD_DIR)/libs/common/vsprintf.o \
 	$(BUILD_DIR)/libs/common/string.o \
 	$(BUILD_DIR)/libs/common/stdlib.o \

@@ -5,6 +5,7 @@
 #include <xjos/bitmap.h>
 #include <xjos/list.h>
 #include <xjos/rbtree.h>
+#include <xjos/signal.h>
 
 #define KERNEL_USER 0
 #define NORMAL_USER 1000
@@ -81,6 +82,9 @@ typedef struct task_t {
     u32 data;               // 数据段起始地址
     u32 end;                // BSS 段结束地址
     struct timer_t *block_timer; // 阻塞定时器
+    u32 signal;                 // 进程信号位图
+    u32 blocked;                // 被阻塞的信号位图
+    sigaction_t actions[MAXSIG];    // 信号处理函数数组
 
     // === 3. 内存管理 ===
     u32 pde;                 // 页目录表物理地址 (CR3)
@@ -157,6 +161,7 @@ typedef struct {
 // 函数声明
 // --------------------------------------------------------
 
+task_t *get_task(pid_t pid);
 void task_init();
 task_t *running_task();
 

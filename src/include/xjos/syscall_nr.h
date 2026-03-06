@@ -26,6 +26,7 @@ typedef enum {
     SYS_NR_GETPID = 20,
     SYS_NR_MOUNT = 21,
     SYS_NR_UMOUNT = 22,
+    SYS_NR_ALARM = 27,
     SYS_NR_FSTAT = 28,
     SYS_NR_STTY = 31,
     SYS_NR_GTTY = 32,

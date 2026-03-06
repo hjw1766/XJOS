@@ -81,6 +81,8 @@ int mkfs(char *devname, int icount);
 
 int kill(pid_t pid, int sig);
 
+int alarm(int sec);
+
 #endif
 
 #endif /* XJOS_SYSCALL_H */

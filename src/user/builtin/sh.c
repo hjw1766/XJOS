@@ -441,7 +441,8 @@ static void readline(char *buf, int count) {
     u32 idx = 0;
 
     while (idx < (u32)(count - 1)) {
-        if (read(STDIN_FILENO, ptr + idx, 1) == -1) break;
+        int ret = read(STDIN_FILENO, ptr + idx, 1);
+        if (ret <= 0) break;
 
         char ch = ptr[idx];
 
@@ -517,6 +518,7 @@ int cmd_sh(int argc, char **argv, char **envp) {
         if (interrupt) {
             // 按下 Ctrl+C 后，清空当前输入的命令并重新显示提示符
             interrupt = false;
+            printf("\n"); // 打印换行，清除当前输入
             continue;
         }
 

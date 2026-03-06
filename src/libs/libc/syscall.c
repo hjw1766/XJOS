@@ -90,6 +90,11 @@ u32 test() {
 }
 
 
+int alarm(int sec) {
+    return _syscall1(SYS_NR_ALARM, sec);
+}
+
+
 void yield() {
     _syscall0(SYS_NR_YIELD);
 }

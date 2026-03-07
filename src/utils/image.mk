@@ -1,11 +1,21 @@
 BUSYBOX_APPLETS ?= ls cat echo env sh
 
+MUSIC:= $(SRC_DIR)/utils/KN.mp3
+
+$(BUILD_DIR)/mono.wav: $(MUSIC)
+	ffmpeg -i $< -t 30 -ac 1 -ar 44100 -acodec pcm_u8 -y $@
+
+$(BUILD_DIR)/stereo.wav: $(MUSIC)
+	ffmpeg -i $< -t 30 -ac 2 -ar 44100 -acodec pcm_s16le -y $@
+
 $(BUILD_DIR)/master.img: $(BUILD_DIR)/boot/boot.bin \
 	$(BUILD_DIR)/boot/loader.bin \
 	$(BUILD_DIR)/system.bin \
 	$(BUILD_DIR)/system.map \
 	$(SRC_DIR)/utils/master.sfdisk \
 	$(BUILTIN_APPS) \
+	$(BUILD_DIR)/mono.wav \
+	$(BUILD_DIR)/stereo.wav \
 	
 # create 16M disk image
 	yes | bximage -q -hd=16 -func=create -sectsize=512 -imgmode=flat $@
@@ -41,6 +51,11 @@ $(BUILD_DIR)/master.img: $(BUILD_DIR)/boot/boot.bin \
 	mkdir -p /mnt/bin
 	mkdir -p /mnt/dev
 	mkdir -p /mnt/mnt
+
+# copy music
+	mkdir -p /mnt/data
+	cp $(BUILD_DIR)/mono.wav /mnt/data
+	cp $(BUILD_DIR)/stereo.wav /mnt/data
 
 # copy builtin apps
 	for app in $(BUILTIN_APPS); \

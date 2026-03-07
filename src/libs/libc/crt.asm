@@ -19,8 +19,8 @@ _start:
     push eax;   ??
     push esp;   用户程序最大栈地址
     push edx;   动态链接器
-    push _init; 初始化函数
     push _fini; 结束函数
+    push _init; 初始化函数
     push ecx;   argv
     push esi;   argc
     push main;  用户程序入口点

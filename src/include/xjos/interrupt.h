@@ -39,6 +39,7 @@ enum {
     IRQ_SERIAL_2    = 3,    // Serial port 2 (COM2)
     IRQ_SERIAL_1    = 4,    // Serial port 1 (COM1)
     IRQ_PARALLEL_2  = 5,    // Parallel port 2 (LPT2)
+    IRQ_SB16        = 5,    // Sound Blaster 16 (uses IRQ5)
     IRQ_FLOPPY      = 6,    // Floppy disk controller
     IRQ_PARALLEL_1  = 7,    // Parallel port 1 (LPT1)
     IRQ_RTC         = 8,    // Real-Time Clock

@@ -21,6 +21,7 @@ enum device_subtype_t {
     DEV_KEYBOARD,       // keyboard
     DEV_SERIAL,         // serial port
     DEV_TTY,            // tty   
+    DEV_SB16,           // sound blaster 16
     DEV_IDE_DISK,       // IDE disk
     DEV_IDE_PART,        // IDE disk part
     DEV_RAMDISK,      // ramdisk

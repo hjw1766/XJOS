@@ -25,6 +25,7 @@ enum device_subtype_t {
     DEV_IDE_DISK,       // IDE disk
     DEV_IDE_PART,        // IDE disk part
     DEV_RAMDISK,      // ramdisk
+    DEV_FLOPPY,         // floppy disk
 };
 
 // device commands

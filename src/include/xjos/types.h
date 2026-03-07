@@ -2,8 +2,9 @@
 #define ONIX_TYPES_H
 
 #include <xjos/xjos.h>
+#include <xjos/errno.h>
 
-#define EOF (-1) // END OF FILE
+#define EOF -EEOF // END OF FILE
 #define EOS '\0'  // END OF STRING
 
 #define NULL ((void*)0) // NULL pointer

@@ -52,6 +52,14 @@ void dev_init() {
         sys_mknod(name, IFBLK | 0600, device->dev);
     }
 
+    for (size_t i = 0; true; i++) {
+        device = device_find(DEV_FLOPPY, i);
+        if (!device)
+            break;
+        sprintf(name, "/dev/%s", device->name);
+        sys_mknod(name, IFBLK | 0600, device->dev);
+    }
+
     // serial devices
     for (size_t i = 0; true; i++) {
         device = device_find(DEV_SERIAL, i);

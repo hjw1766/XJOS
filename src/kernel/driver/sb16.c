@@ -58,8 +58,8 @@
 #define STATUS_READ 0x80  // read buffer status
 #define STATUS_WRITE 0x80 // write buffer status
 
-#define DMA_BUF_ADDR 0x40000 // 必须 64K 字节对齐
-#define DMA_BUF_SIZE 0x4000  // 缓冲区长度
+#define DMA_BUF_ADDR 0x90000 // 不能跨过64KB边界，必须在0~16MB范围内
+#define DMA_BUF_SIZE 0x8000  // 缓冲区长度
 
 #define SAMPLE_RATE 44100 // 采样率
 

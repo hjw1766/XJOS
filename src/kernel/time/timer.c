@@ -32,7 +32,7 @@ void default_timeout(timer_t *timer) {
 timer_t *timer_add(u32 expire_ms, handler_t handler, void *arg, struct task_t *task) {
     timer_t *timer = timer_get();
     timer->task = task;
-    timer->expires = jiffies + expire_ms / jiffy;
+    timer->expires = timer_expire_jiffies(expire_ms);
     timer->handler = handler;
     timer->arg = arg;
     timer->active = false;
@@ -42,6 +42,13 @@ timer_t *timer_add(u32 expire_ms, handler_t handler, void *arg, struct task_t *t
     return timer;
 }
 
+// 更新定时器超时
+void timer_update(timer_t *timer, u32 expire_ms) {
+    list_remove(&timer->node);
+    timer->expires = timer_expire_jiffies(expire_ms);
+    list_insert_sort(&timer_list, &timer->node, list_node_offset(timer_t, node, expires));
+}
+
 u32 timer_expires() {
     if (list_empty(&timer_list)){
         return EOF;
@@ -49,6 +56,16 @@ u32 timer_expires() {
 
     timer_t *timer = element_entry(timer_t, node, timer_list.head.next);
     return timer->expires;
+}
+
+// 得到超时时间片
+int timer_expire_jiffies(u32 expire_ms) {
+    return jiffies + expire_ms / jiffy;
+}
+
+// 判断是否已经超时
+bool timer_is_expires(u32 expires) {
+    return jiffies > expires;
 }
 
 void timer_init() {

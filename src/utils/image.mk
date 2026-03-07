@@ -1,12 +1,12 @@
 BUSYBOX_APPLETS ?= ls cat echo env sh
 
-MUSIC:= $(SRC_DIR)/utils/KN.mp3
+# MUSIC:= $(SRC_DIR)/utils/KN.mp3
 
-$(BUILD_DIR)/mono.wav: $(MUSIC)
-	ffmpeg -i $< -t 30 -ac 1 -ar 44100 -acodec pcm_u8 -y $@
+# $(BUILD_DIR)/mono.wav: $(MUSIC)
+# 	ffmpeg -i $< -t 30 -ac 1 -ar 44100 -acodec pcm_u8 -y $@
 
-$(BUILD_DIR)/stereo.wav: $(MUSIC)
-	ffmpeg -i $< -t 30 -ac 2 -ar 44100 -acodec pcm_s16le -y $@
+# $(BUILD_DIR)/stereo.wav: $(MUSIC)
+# 	ffmpeg -i $< -t 30 -ac 2 -ar 44100 -acodec pcm_s16le -y $@
 
 $(BUILD_DIR)/master.img: $(BUILD_DIR)/boot/boot.bin \
 	$(BUILD_DIR)/boot/loader.bin \
@@ -14,8 +14,9 @@ $(BUILD_DIR)/master.img: $(BUILD_DIR)/boot/boot.bin \
 	$(BUILD_DIR)/system.map \
 	$(SRC_DIR)/utils/master.sfdisk \
 	$(BUILTIN_APPS) \
-	$(BUILD_DIR)/mono.wav \
-	$(BUILD_DIR)/stereo.wav \
+
+# 	$(BUILD_DIR)/mono.wav \
+# 	$(BUILD_DIR)/stereo.wav \
 	
 # create 16M disk image
 	yes | bximage -q -hd=16 -func=create -sectsize=512 -imgmode=flat $@
@@ -53,9 +54,9 @@ $(BUILD_DIR)/master.img: $(BUILD_DIR)/boot/boot.bin \
 	mkdir -p /mnt/mnt
 
 # copy music
-	mkdir -p /mnt/data
-	cp $(BUILD_DIR)/mono.wav /mnt/data
-	cp $(BUILD_DIR)/stereo.wav /mnt/data
+# 	mkdir -p /mnt/data
+# 	cp $(BUILD_DIR)/mono.wav /mnt/data
+# 	cp $(BUILD_DIR)/stereo.wav /mnt/data
 
 # copy builtin apps
 	for app in $(BUILTIN_APPS); \
@@ -110,6 +111,12 @@ $(BUILD_DIR)/slave.img: \
 
 	sudo losetup -d /dev/loop0
 
+
+# $(BUILD_DIR)/floppya.img:
+
+# # create 1.44M floppy image
+# 	yes | bximage -q -fd=1.44M -func=create -sectsize=512 -imgmode=flat $@
+
 .PHONY: mount0
 mount0: $(BUILD_DIR)/master.img
 	sudo losetup /dev/loop0 --partscan $<
@@ -133,6 +140,7 @@ umount1: /dev/loop1
 	-sudo losetup -d $<
 
 IMAGES:= $(BUILD_DIR)/master.img \
-	$(BUILD_DIR)/slave.img
+	$(BUILD_DIR)/slave.img \
+# 	$(BUILD_DIR)/floppya.img
 
 image: $(IMAGES)

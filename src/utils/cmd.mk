@@ -2,19 +2,20 @@
 bochs: $(IMAGES)
 	bochs -q -f ../bochs/bochsrc -unlock
 
-AUDIO_OUT := $(BUILD_DIR)/sb16_capture.wav
+# AUDIO_OUT := $(BUILD_DIR)/sb16_capture.wav
 
 QEMU:= qemu-system-i386
 QEMU+= -m 32M
 # QEMU+= -audiodev pa,id=hda	# audio dev				* temp ban audio
 # QEMU+= -machine pcspk-audiodev=hda	# pc speaker dev
-QEMU += -audiodev wav,id=snd,path=$(AUDIO_OUT)
-QEMU += -machine pcspk-audiodev=snd
-QEMU += -device sb16,audiodev=snd
+# QEMU += -audiodev wav,id=snd,path=$(AUDIO_OUT)
+# QEMU += -machine pcspk-audiodev=snd
+# QEMU += -device sb16,audiodev=snd
 
 QEMU+= -rtc base=localtime	# set rtc to localtime
 QEMU+= -drive file=$(BUILD_DIR)/master.img,if=ide,index=0,media=disk,format=raw # master hard disk
 QEMU+= -drive file=$(BUILD_DIR)/slave.img,if=ide,index=1,media=disk,format=raw # slave hard disk
+# QEMU+= -drive file=$(BUILD_DIR)/floppya.img,if=floppy,index=0,media=disk,format=raw # software floppy disk
 QEMU+= -chardev stdio,mux=on,id=com1 # char dev 1
 # QEMU+= -chardev vc,mux=on,id=com1 # char dev 1
 # QEMU+= -chardev vc,mux=on,id=com2 # char dev 2

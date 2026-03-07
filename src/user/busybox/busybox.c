@@ -46,7 +46,8 @@ static void usage(void) {
     printf("usage:\n");
     printf("  busybox <applet> [args...]\n");
     printf("  <applet> [args...]   (via hardlink name)\n");
-    printf("applets: ls cat echo env pwd clear date mkdir rmdir rm mount umount mkfs sh\n");
+    printf("applets: ls cat echo env pwd clear date" 
+        "mkdir rmdir rm mount umount mkfs sh dup alarm kill \n");
 }
 
 int main(int argc, char **argv, char **envp) {

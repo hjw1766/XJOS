@@ -65,3 +65,35 @@ outw:
 
     leave 
     ret
+
+global inl
+inl:
+    push ebp; 
+    mov ebp, esp
+
+    xor eax, eax 
+    mov edx, [ebp + 8]
+    in eax, dx   ; 32bit
+
+    jmp $+2
+    jmp $+2 
+    jmp $+2 
+
+    leave
+    ret
+
+global outl
+outl:
+    push ebp; 
+    mov ebp, esp
+
+    mov edx, [ebp + 8]
+    mov eax, [ebp + 12]
+    out dx, eax
+
+    jmp $+2 
+    jmp $+2  
+    jmp $+2 
+
+    leave 
+    ret

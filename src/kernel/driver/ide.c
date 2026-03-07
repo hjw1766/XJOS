@@ -139,7 +139,7 @@ static void ide_handler(int vector) {
 }
 
 
-static u32 ide_error(ide_ctrl_t *ctrl) {
+static void ide_error(ide_ctrl_t *ctrl) {
     u8 error = inb(ctrl->iobase + IDE_ERR);
     
     if (error & IDE_ER_BBK)
@@ -265,11 +265,9 @@ int ide_pio_read(ide_disk_t *disk, void *buf, u8 count, idx_t lba) {
 
     for (size_t i = 0; i < count; i++) {
         task_t *task = running_task();
-        if (task->state == TASK_RUNNING) {
-            ctrl->waiter = task;
-            task_block(task, NULL, TASK_BLOCKED, TIMELESS);
-        }
-        
+        ctrl->waiter = task;
+        assert(task_block(task, NULL, TASK_BLOCKED, TIMELESS) == EOK);
+
         // DRQ, cpu ready to receive data
         ide_busy_wait(ctrl, IDE_SR_DRQ);
         // sector i
@@ -304,10 +302,8 @@ int ide_pio_write(ide_disk_t *disk, void *buf, u8 count, idx_t lba) {
         ide_pio_write_sector(disk, (u16 *)offset);
         
         task_t *task = running_task();
-        if (task->state == TASK_RUNNING) {
-            ctrl->waiter = task;
-            task_block(task, NULL, TASK_BLOCKED, TIMELESS);
-        }
+        ctrl->waiter = task;
+        assert(task_block(task, NULL, TASK_BLOCKED, TIMELESS) == EOK);
 
         // wait for BSY = 1
         ide_busy_wait(ctrl, IDE_SR_NULL);
@@ -524,13 +520,14 @@ static void ide_install() {
 void ide_init() {
     LOGK("ide init...\n");
     
-    ide_ctrl_init();
-
-    ide_install();
     // register int
     set_interrupt_handler(IRQ_HARDDISK, ide_handler);
     set_interrupt_handler(IRQ_HARDDISK2, ide_handler);
     set_interrupt_mask(IRQ_HARDDISK, true);
     set_interrupt_mask(IRQ_HARDDISK2, true);
     set_interrupt_mask(IRQ_CASCADE, true);
+    
+    ide_ctrl_init();
+
+    ide_install();
 }

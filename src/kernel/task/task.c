@@ -95,7 +95,7 @@ void task_sleep(u32 ms) {
     task_block(task, &sleep_list, TASK_SLEEPING, ms);
 }
 
-int task_block(task_t *task, list_t *blist, task_state_t state, int timeout_ms) {
+err_t task_block(task_t *task, list_t *blist, task_state_t state, int timeout_ms) {
     assert(!get_interrupt_state());
     if (!blist) blist = &block_list;
     list_push(blist, &task->node);
@@ -580,7 +580,6 @@ void task_put_fd(task_t *task, fd_t fd) {
 
 extern void idle_thread();
 extern void init_thread();
-extern void test_thread();
 extern void sync_thread();
 
 // 修复启动时的崩溃：初始化 0号任务 (Boot Task)
@@ -610,6 +609,5 @@ void task_init() {
     // 2. 创建系统级任务
     idle_task = task_create(idle_thread, "idle", NICE_MAX, KERNEL_USER);
     task_create(init_thread, "init", NICE_DEFAULT, NORMAL_USER);
-    task_create(test_thread, "test", NICE_DEFAULT, NORMAL_USER);
     task_create(sync_thread, "sync", NICE_DEFAULT, NORMAL_USER);
 }

@@ -57,4 +57,6 @@ typedef enum {
 
 typedef int32 off_t;    // file offset
 
+typedef int err_t;      // error code
+
 #endif

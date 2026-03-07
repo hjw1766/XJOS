@@ -104,7 +104,7 @@ protected_mode:
 
     mov edi, 0x10000
     mov ecx, 10
-    mov bl, 250
+    mov bl, 254
     
     call read_disk
 

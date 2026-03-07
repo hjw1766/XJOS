@@ -224,7 +224,7 @@ static void load_segment(inode_t *inode, Elf32_Phdr *phdr) {
     if ((phdr->p_flags & PF_W) == 0) {
         for (size_t i = 0; i < count; i++) {
             u32 addr = vaddr + i * PAGE_SIZE;
-            page_entry_t *entry = get_entry(addr, false);
+            page_entry_t *entry = get_entry_private(addr, false);
             entry->write = false;
             entry->readonly = true;
             flush_tlb(addr);

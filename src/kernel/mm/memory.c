@@ -16,6 +16,8 @@
 extern int sys_read(fd_t fd, char *buf, int len);
 extern int sys_lseek(fd_t fd, int offset, int whence);
 
+static u32 copy_page(void *page);
+
 #ifdef XJOS_DEBUG
 #define USER_MEMORY true
 #else
@@ -277,6 +279,49 @@ page_entry_t *get_entry(u32 vaddr, bool create) {
 }
 
 
+// 私有化页表项，写时复制
+page_entry_t *get_entry_private(u32 vaddr, bool create) {
+    page_entry_t *pde = get_pde();
+    u32 didx = DIDX(vaddr);
+    page_entry_t *dentry = &pde[didx];
+
+    if (!dentry->present) {
+        return get_entry(vaddr, create);
+    }
+
+    if (!dentry->write) {
+        assert(memory_map[dentry->index] > 0);
+
+        if (memory_map[dentry->index] > 1) {
+            page_entry_t *table = (page_entry_t *)(PDE_MASK | (didx << 12));
+            u32 paddr = copy_page((void *)table);
+            memory_map[dentry->index]--;
+            dentry->index = IDX(paddr);
+        }
+
+        dentry->write = true;
+        flush_tlb((u32)(PDE_MASK | (didx << 12)));
+    }
+
+    return get_entry(vaddr, create);
+}
+
+
+// va -> pa
+u32 get_paddr(u32 vaddr) {
+    page_entry_t *pde = get_pde();
+    page_entry_t *entry = &pde[DIDX(vaddr)];
+    if (!entry->present)
+        return 0;
+    
+    entry = get_entry(vaddr, false);
+    if (!entry->present)
+        return 0;
+
+    return PAGE(entry->index) | (vaddr & 0xfff);
+}
+
+
 void flush_tlb(u32 vaddr) {
     asm volatile("invlpg (%0)" :: "r"(vaddr) : "memory");
 }
@@ -385,7 +430,7 @@ void link_page(u32 vaddr) {
     ASSERT_PAGE(vaddr);
 
     // pte -> page table
-    page_entry_t *entry = get_entry(vaddr, true);
+    page_entry_t *entry = get_entry_private(vaddr, true);
 
     u32 index = IDX(vaddr);
 
@@ -410,7 +455,7 @@ void unlink_page(u32 vaddr) {
     if (!entry->present)    // check page table present
         return;
     
-    entry = get_entry(vaddr, false);
+    entry = get_entry_private(vaddr, false);
     u32 index = IDX(vaddr);
 
     if (!entry->present) {
@@ -488,19 +533,20 @@ void free_pde() {
 // copy current pde
 page_entry_t *copy_pde() {
     task_t *task = running_task();
-    page_entry_t *pde = (page_entry_t*)alloc_kpage(1);
-    memcpy(pde, (void*)task->pde, PAGE_SIZE);
 
-    page_entry_t *entry = &pde[1023];
-    entry_init(entry, IDX(pde));
-
-    // * Isolate parent and child processes
-    page_entry_t *dentry;
+    page_entry_t *pde = (page_entry_t *)task->pde;
+    page_entry_t *dentry = NULL;
+    page_entry_t *entry = NULL;
 
     for (size_t didx = ((sizeof(KERNEL_PAGE_TABLE) / 4)); didx < 1023; didx++) {
         dentry = &pde[didx];
         if (!dentry->present)
             continue;
+
+        assert(memory_map[dentry->index] > 0);
+        dentry->write = false;   // read only
+        memory_map[dentry->index]++;   // ref count + 1
+        assert(memory_map[dentry->index] < 255);
 
         // pde[0] + didx << 12
         page_entry_t *pte = (page_entry_t *)(PDE_MASK | (didx << 12));
@@ -509,7 +555,7 @@ page_entry_t *copy_pde() {
             entry = &pte[tidx];
             if (!entry->present)
                 continue;
-            
+
             // present
             assert(memory_map[entry->index] > 0);
             // if dont shared page, read only
@@ -520,10 +566,13 @@ page_entry_t *copy_pde() {
 
             assert(memory_map[entry->index] < 255);
         }
-
-        u32 paddr = copy_page(pte);
-        dentry->index = IDX(paddr);
     }
+
+    pde = (page_entry_t *)alloc_kpage(1);    // new pde
+    memcpy(pde, (void *)task->pde, PAGE_SIZE);   // copy pde
+
+    entry = &pde[1023];
+    entry_init(entry, IDX(pde));   // pde[1023] -> pde
 
     set_cr3(task->pde); // active parent process pde
 
@@ -580,7 +629,7 @@ void *sys_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t off
         memset((void *)page, 0, PAGE_SIZE);
         bitmap_set(task->vmap, IDX(page), true);
 
-        page_entry_t *entry = get_entry(page, false);
+        page_entry_t *entry = get_entry_private(page, false);
         entry->user = true;
         entry->write = false;
         entry->readonly = true;
@@ -623,6 +672,43 @@ int sys_munmap(void *addr, size_t length) {
     }
 
     return 0;
+}
+
+
+/* 页表写时拷贝
+@param vaddr 访问的虚拟地址
+@param level 页表层级 页目录，页表，页框
+*/
+void copy_on_write(u32 vaddr, int level) {
+    // 递归返回
+    if (level == 0)
+        return;
+
+    // get vaddr -> pte
+    page_entry_t *entry = get_entry(vaddr, false);
+
+    // 递归处理
+    copy_on_write((u32)entry, level - 1);   
+
+    entry = get_entry(vaddr, false);
+    // 可写直接返回
+    if (entry->write) return;
+
+    assert(memory_map[entry->index] > 0);
+
+    if (memory_map[entry->index] == 1) {
+        entry->write = true;
+        LOGK("WRITE page for 0x%p\n", vaddr);
+    } else {
+        u32 paddr = copy_page((void *)PAGE(IDX(vaddr)));
+        memory_map[entry->index]--;
+        entry->index = IDX(paddr);
+        entry->write = true;
+        LOGK("COPY page for 0x%p\n", vaddr);
+    }
+
+    assert(memory_map[entry->index] > 0);
+    flush_tlb(vaddr);
 }
 
 typedef struct {
@@ -668,27 +754,17 @@ void page_fault(u32 vector,
     if (code->present && code->write) { 
         page_entry_t *entry = get_entry(vaddr, false);
 
+        assert(entry->present);
+
         if (entry->readonly) {
-            panic("Segmentation Fault: Write to Read-Only page at 0x%p\n", vaddr);
+            printk("Segmentation Fault: Write to Read-Only page at 0x%p\n", vaddr);
+            task_exit(-1);
+            return;
         }
 
         assert(!entry->shared);  // not shared page
-        assert(memory_map[entry->index] > 0);
-        if (memory_map[entry->index] == 1) {
-            // parent process exit
-            entry->write = true;
-            flush_tlb(vaddr);
-            LOGK("write page for 0x%p\n", vaddr);
-        } else {
-            // >> 12 + << 12, clear offset
-            void *page = (void *)PAGE(IDX(vaddr));
-            u32 paddr = copy_page(page);
-            memory_map[entry->index]--;
-            entry_init(entry, IDX(paddr));
-            flush_tlb(vaddr);
-            LOGK("copy page for 0x%p\n", vaddr);
-        }
 
+        copy_on_write(vaddr, 3);
         return;
     }
 

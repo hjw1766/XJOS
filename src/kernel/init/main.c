@@ -1,56 +1,37 @@
 extern void interrupt_init();
 extern void clock_init();
 extern void timer_init();
-extern void time_init();
-extern void rtc_init();
 extern void memory_map_init();
 extern void mapping_init();
 extern void arena_init();
 extern void task_init();
 extern void syscall_init();
-extern void keyboard_init();
-extern void serial_init();
-extern void tty_init();
 extern void tss_init();
-extern void ide_init();
-extern void ramdisk_init();
-extern void buffer_init();
-extern void file_init();
-extern void super_init();
-extern void inode_init();
-extern void dcache_init();
 
 #include <xjos/interrupt.h>
-#include <xjos/debug.h>
 
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
 void kernel_init() {
-    tss_init();
-    memory_map_init();
-    mapping_init();
-    arena_init();
+    // 1. CPU 结构与内存管理初始化 (最先执行，绝对不能乱)
+    tss_init();          // 初始化任务状态段
+    memory_map_init();   // 解析物理内存容量
+    mapping_init();      // 建立内核页表映射 (Paging)
+    arena_init();        // 初始化内核堆内存分配器 (kmalloc/kfree)
 
-    interrupt_init();
-    clock_init();
-    timer_init();
-    keyboard_init();
-    tty_init();
-    time_init();
-    serial_init();
-    ide_init();
-    ramdisk_init();   
-    syscall_init();
+    // 2. 中断与核心时钟系统
+    interrupt_init();    // 初始化中断描述符表 (IDT) 和 8259A 芯片
+    clock_init();        // 初始化系统时钟 (PIT 8253/8254)
+    timer_init();        // 初始化内核软件定时器链表
 
-    buffer_init(); 
-    inode_init();
-    super_init();
-    dcache_init();
-    file_init();
+    // 3. 系统调用接口
+    syscall_init();      // 注册所有的 sys_* 系统调用
+
+    // 4. 任务调度子系统初始化
     task_init();
 
-    // while (1);
-
+    // 5. 开启中断，将控制权正式移交给调度器
+    // 此时时钟中断开始触发，调度器会选中 init_thread 开始执行设备和文件系统的初始化
     set_interrupt_state(true);
 }

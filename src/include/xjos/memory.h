@@ -72,6 +72,7 @@ void free_kpage(u32 vaddr, u32 count);
 
 // get page table entry
 page_entry_t *get_entry(u32 vaddr, bool create);
+page_entry_t *get_entry_private(u32 vaddr, bool create);
 
 // flush tlb
 void flush_tlb(u32 vaddr);

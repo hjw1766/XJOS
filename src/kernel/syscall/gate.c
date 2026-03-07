@@ -3,13 +3,7 @@
 #include <xjos/debug.h>
 #include <xjos/syscall_nr.h>
 #include <xjos/task.h>
-#include <xjos/memory.h>
-#include <drivers/device.h>
-#include <xjos/string.h>
 #include <fs/buffer.h>
-
-extern void link_page(u32 vaddr);
-extern void unlink_page(u32 vaddr);
 
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
@@ -29,34 +23,12 @@ static void sys_default() {
     panic("Ssycall not implemented");
 }
 
-
-static u32 sys_test() {
-    char ch;
-
-    device_t *device;
-
-    device_t *serial = device_find(DEV_SERIAL, 1);
-    assert(serial);
-
-    device_t *keyboard = device_find(DEV_KEYBOARD, 0);
-    assert(keyboard);
-
-    device_t *console = device_find(DEV_CONSOLE, 0);
-    assert(console);
-
-    device_read(keyboard->dev, &ch, 1, 0, 0);
-
-    device_write(serial->dev, &ch, 1, 0, 0);
-    device_write(console->dev, &ch, 1, 0, 0);
-
-    return 255;
-}
-
-
 int sys_sync() {
     bsync();
     return 0;
 }
+
+extern int sys_test();
 
 extern int sys_mkdir();
 extern int sys_rmdir();

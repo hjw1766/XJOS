@@ -301,14 +301,7 @@ static void builtin_test(int argc, char *argv[]) {
     (void)argc;
     (void)argv;
 
-    int counter = 1;
-
-    while (counter <= 5) {
-        if (interrupt) break; // 允许通过 Ctrl+C 中断测试命令
-        printf("Test %d\n", counter);
-        sleep(1000);
-        counter++;
-    }
+    test();
 }
 
 static void builtin_help(int argc, char *argv[]) {

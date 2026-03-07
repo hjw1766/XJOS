@@ -15,6 +15,7 @@
 #include <xjos/timer.h>
 #include <drivers/device.h>
 #include <xjos/tty.h>
+#include <xjos/fpu.h>
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
@@ -256,7 +257,13 @@ pid_t task_fork() {
             child->vmap->bits = buf;
         }
     }
-    
+
+    // FPU 状态拷贝 (如果父进程使用了 FPU)
+    if(parent->fpu) {
+        child->fpu = kmalloc(sizeof(fpu_t));
+        memcpy(child->fpu, parent->fpu, sizeof(fpu_t));
+    }
+ 
     // 拷贝页目录 (COW 或 深拷贝由内存管理模块决定)
     child->pde = (u32)copy_pde();
 
@@ -405,6 +412,13 @@ void task_exit(int status) {
             free_kpage((u32)task->vmap->bits, 1);
         }
         kfree(task->vmap);
+    }
+
+    // 释放 FPU 状态
+    if (task->fpu) {
+        kfree(task->fpu);
+        task->fpu = NULL;
+        task->flags = 0;
     }
 
     kfree(task->pwd);

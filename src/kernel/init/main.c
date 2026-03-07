@@ -7,6 +7,7 @@ extern void arena_init();
 extern void task_init();
 extern void syscall_init();
 extern void tss_init();
+extern void fpu_init();
 
 #include <xjos/interrupt.h>
 
@@ -24,6 +25,8 @@ void kernel_init() {
     interrupt_init();    // 初始化中断描述符表 (IDT) 和 8259A 芯片
     clock_init();        // 初始化系统时钟 (PIT 8253/8254)
     timer_init();        // 初始化内核软件定时器链表
+    
+    fpu_init();          // 初始化 FPU 相关设置
 
     // 3. 系统调用接口
     syscall_init();      // 注册所有的 sys_* 系统调用

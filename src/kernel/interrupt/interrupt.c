@@ -66,6 +66,12 @@ void send_eoi(int vector) {
 }
 
 
+void set_exception_handler(u32 intr, handler_t handler) {
+    assert(intr >= 0 && intr <= 17);
+    handler_table[intr] = handler;
+}
+
+
 void set_interrupt_handler(u32 irq, handler_t handler) {
     assert(irq >= 0 && irq < 16);
     handler_table[IRQ_MASTER_NR + irq] = handler;

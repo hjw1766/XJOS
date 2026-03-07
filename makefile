@@ -7,7 +7,9 @@ SRC_DIR := src
 DEBUG ?= 0
 
 # Busybox-style applets (kept in sync with src/utils/image.mk)
-BUSYBOX_APPLETS := ls cat echo env pwd clear date mkdir rmdir rm mount umount mkfs sh dup kill alarm
+BUSYBOX_APPLETS := ls cat echo env pwd \
+clear date mkdir rmdir rm mount \
+umount mkfs sh dup kill alarm float
 
 
 # Kernel entry point address
@@ -67,6 +69,7 @@ KERNEL_COMMON_OBJS := $(patsubst $(SRC_DIR)/libs/common/%.c,$(BUILD_DIR)/kernel/
 ifeq ($(DEBUG), 1)
 KERNEL_DEBUG_OBJS := \
 	$(BUILD_DIR)/user/init.o \
+	$(BUILD_DIR)/user/builtin/sh.o \
     $(BUILD_DIR)/libs/libc/printf.o \
     $(BUILD_DIR)/libs/libc/syscall.o
 else
@@ -92,6 +95,7 @@ LIB_OBJS := \
 	$(BUILD_DIR)/libs/common/vsprintf.o \
 	$(BUILD_DIR)/libs/common/string.o \
 	$(BUILD_DIR)/libs/common/stdlib.o \
+	$(BUILD_DIR)/libs/common/math.o \
 
 # ====================================================================
 #                           构建规则

@@ -38,6 +38,11 @@ typedef enum {
     TASK_DIED,          // 僵尸状态
 } task_state_t;
 
+typedef enum task_flag_t {
+    TASK_FPU_USED = 1,      // 任务使用过 FPU，需要在切换时保存/恢复 FPU 状态
+    TASK_FPU_ENABLED = 2,   // 任务当前 FPU 状态已启用 (如果设置了 TASK_FPU_USED)，否则在切换时会禁用 FPU
+} task_flag_t;
+
 /* +---------------------+ <--- Page End (High Address, e.g., 0x2000)
 |                     |
 |   Kernel Stack      |
@@ -86,6 +91,8 @@ typedef struct task_t {
     u32 blocked;                // 被阻塞的信号位图
     sigaction_t actions[MAXSIG];    // 信号处理函数数组
     struct timer_t *alarm;          // 定时器 (alarm)
+    struct fpu_t *fpu;                // FPU 状态指针 (如果 TASK_FPU_USED)
+    u32 flags;                 // 任务标志 (task_flag_t)
 
     // === 3. 内存管理 ===
     u32 pde;                 // 页目录表物理地址 (CR3)
@@ -169,7 +176,6 @@ task_t *running_task();
 void schedule();
 void task_yield();
 void task_sleep(u32 ms);
-bool task_wakeup();
 
 int task_block(task_t *task, list_t *blist, task_state_t state, int timeout_ms);
 void task_unblock(task_t *task, int reason);

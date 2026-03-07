@@ -7,6 +7,7 @@
 #include <xjos/interrupt.h>
 #include <xjos/rbtree.h>
 #include <xjos/string.h>
+#include <xjos/fpu.h>
 
 // === Internal CFS Ready Queue ===
 static rb_root_t cfs_ready_root = RB_ROOT; // rbtree root
@@ -253,6 +254,8 @@ void schedule() {
     // --- 6. Switch to next task ---
     assert(next != NULL);
     next->state = TASK_RUNNING;
+
+    fpu_disable(current); // 当前进程禁用FPU
     task_activate(next);
     task_switch(next);
 }

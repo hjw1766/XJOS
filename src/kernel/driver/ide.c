@@ -129,7 +129,7 @@ static void ide_handler(int vector) {
 
     // clear IRQ
     u8 state = inb(ctrl->iobase + IDE_STATUS);
-    LOGK("harddisk interrupt vector %d state 0x%x\n", vector, state);
+    MM_TRACEK("harddisk interrupt vector %d state 0x%x\n", vector, state);
 
     if (ctrl->waiter) {
         // have process waiter
@@ -289,7 +289,7 @@ int ide_pio_write(ide_disk_t *disk, void *buf, u8 count, idx_t lba) {
 
     mutex_lock(&ctrl->lock);
 
-    LOGK("write lab 0x%x\n", lba);
+    MM_TRACEK("write lab 0x%x\n", lba);
 
     ide_select_drive(disk);
     ide_busy_wait(ctrl, IDE_SR_DRDY);

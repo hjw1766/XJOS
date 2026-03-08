@@ -168,15 +168,15 @@ static u32 get_page() {
             assert(free_pages > 0);
             free_pages--;
 
-            LOGK("Get page index 0x%x\n", i);
-
             u32 page = PAGE(i);  // current page address
-            LOGK("Get page addr 0x%p\n", page);
+            MM_TRACEK("Get page index 0x%x\n", i);
+            MM_TRACEK("Get page addr 0x%p\n", page);
 
             return page;
         }
     }
 
+    LOGK("No free page available, total pages %d, used pages %d\n", total_pages, used_pages);
     panic("No free page available\n");
 }
 
@@ -200,7 +200,7 @@ static void put_page(u32 addr) {
     }
 
     assert(free_pages > 0 && free_pages < total_pages);
-    LOGK("Put page addr 0x%p\n", addr);
+    MM_TRACEK("Put page addr 0x%p\n", addr);
 }
 
 
@@ -263,7 +263,7 @@ static page_entry_t *get_pte(u32 vaddr, bool create) {
     page_entry_t *table = (page_entry_t *)(PDE_MASK | (pde_idx << 12));
 
     if (!entry->present) {
-        LOGK("Get and create page table entry for 0x%p\n", vaddr);
+        MM_TRACEK("Get and create page table entry for 0x%p\n", vaddr);
         u32 page = get_page();  // page table
         entry_init(entry, IDX(page));
         memset(table, 0, PAGE_SIZE);  
@@ -388,7 +388,7 @@ static u32 scan_page(bitmap_t *map, u32 count) {
         panic("Scan page fail!");
     
     idx_t addr = PAGE(index);
-    LOGK("Scan page addr 0x%p count %d\n", addr, count);
+    MM_TRACEK("Scan page addr 0x%p count %d\n", addr, count);
     return addr;
 }
 
@@ -411,7 +411,7 @@ u32 alloc_kpage(u32 count) {
     assert(count > 0);
 
     idx_t vaddr = scan_page(&kernel_map, count);
-    LOGK("Alloc kernel pages 0x%p count %d\n", vaddr, count);
+    MM_TRACEK("Alloc kernel pages 0x%p count %d\n", vaddr, count);
     memset((void*)vaddr, 0, count * PAGE_SIZE);
     return vaddr;
 }
@@ -422,7 +422,7 @@ void free_kpage(u32 vaddr, u32 count) {
     assert(count > 0);
 
     reset_page(&kernel_map, vaddr, count);
-    LOGK("free kernel pages 0x%p count %d\n", vaddr, count);
+    MM_TRACEK("free kernel pages 0x%p count %d\n", vaddr, count);
 }
 
 
@@ -443,7 +443,7 @@ void link_page(u32 vaddr) {
     entry_init(entry, IDX(paddr));
     flush_tlb(vaddr);
 
-    LOGK("Link from 0x%p to 0x%p\n", vaddr, paddr);
+    MM_TRACEK("Link from 0x%p to 0x%p\n", vaddr, paddr);
 }
 
 
@@ -472,6 +472,33 @@ void unlink_page(u32 vaddr) {
     put_page(paddr);
 
     flush_tlb(vaddr);
+}
+
+
+void map_page(u32 vaddr, u32 paddr) {
+    ASSERT_PAGE(vaddr);
+    ASSERT_PAGE(paddr);
+
+    page_entry_t *entry = get_entry(vaddr, true);
+
+    if (entry->present)
+        return;
+    if (!paddr)
+        paddr = get_page();
+
+    entry_init(entry, IDX(paddr));
+    flush_tlb(vaddr);
+}
+
+
+void map_area(u32 paddr, u32 size) {
+    ASSERT_PAGE(paddr);
+    u32 page_count = div_round_up(size, PAGE_SIZE);
+    for (size_t i = 0; i < page_count; i++) {
+        map_page(paddr + i * PAGE_SIZE, paddr + i * PAGE_SIZE);
+    }
+
+    LOGK("Map memory 0x%p size 0x%x\n", paddr, size);
 }
 
 
@@ -505,7 +532,7 @@ void free_pde() {
     page_entry_t *pde = get_pde();
     
     // pde 2 - 1022
-    for (size_t didx = (sizeof(KERNEL_PAGE_TABLE) / 4); didx < 1023; didx++) {
+    for (size_t didx = (sizeof(KERNEL_PAGE_TABLE) / 4); didx < USER_STACK_TOP >> 22; didx++) {
         page_entry_t *dentry = &pde[didx];
         if (!dentry->present)
             continue;
@@ -538,7 +565,7 @@ page_entry_t *copy_pde() {
     page_entry_t *dentry = NULL;
     page_entry_t *entry = NULL;
 
-    for (size_t didx = ((sizeof(KERNEL_PAGE_TABLE) / 4)); didx < 1023; didx++) {
+    for (size_t didx = ((sizeof(KERNEL_PAGE_TABLE) / 4)); didx < USER_STACK_TOP >> 22; didx++) {
         dentry = &pde[didx];
         if (!dentry->present)
             continue;
@@ -676,38 +703,33 @@ int sys_munmap(void *addr, size_t length) {
 
 
 /* 页表写时拷贝
-@param vaddr 访问的虚拟地址
-@param level 页表层级 页目录，页表，页框
+* @param vaddr 访问的虚拟地址
 */
-void copy_on_write(u32 vaddr, int level) {
-    // 递归返回
-    if (level == 0)
+void copy_on_write(u32 vaddr) {
+    // 1. 页表本身私有且可写
+    page_entry_t *entry = get_entry_private(vaddr, false);
+
+    // 2. 页表项不可写，说明是共享页，进行写时复制
+    if (entry->write)
         return;
-
-    // get vaddr -> pte
-    page_entry_t *entry = get_entry(vaddr, false);
-
-    // 递归处理
-    copy_on_write((u32)entry, level - 1);   
-
-    entry = get_entry(vaddr, false);
-    // 可写直接返回
-    if (entry->write) return;
-
+    
     assert(memory_map[entry->index] > 0);
 
+    // 3. 物理页
     if (memory_map[entry->index] == 1) {
         entry->write = true;
-        LOGK("WRITE page for 0x%p\n", vaddr);
+        MM_TRACEK("WRITE page for 0x%p (ref=1)\n", vaddr);
     } else {
-        u32 paddr = copy_page((void *)PAGE(IDX(vaddr)));
-        memory_map[entry->index]--;
-        entry->index = IDX(paddr);
-        entry->write = true;
-        LOGK("COPY page for 0x%p\n", vaddr);
+        // 引用计数 > 1 需要复制物理页
+        u32 paddr = copy_page((void *)(PAGE(IDX(vaddr))));
+
+        memory_map[entry->index]--;   // 原物理页引用计数 - 1
+        entry->index = IDX(paddr);    // 更新页表项为新物理
+        entry->write = true;         // 设置为可写
+        MM_TRACEK("COPY page for 0x%p (ref=%d)\n", vaddr, memory_map[entry->index] + 1);
     }
 
-    assert(memory_map[entry->index] > 0);
+    // 4. 刷新TLB
     flush_tlb(vaddr);
 }
 
@@ -733,7 +755,6 @@ void page_fault(u32 vector,
     
     assert(vector == 0xe);
     u32 vaddr = get_cr2();
-    LOGK("fault address 0x%p eip 0x%p \n", vaddr, eip);
 
     page_error_code_t *code = (page_error_code_t *)&error;
     task_t *task = running_task();
@@ -744,6 +765,7 @@ void page_fault(u32 vector,
     // if user process access kernel memory, panic
     if (vaddr < USER_EXEC_ADDR || vaddr >= USER_STACK_TOP) {
         assert(task->uid);
+        LOGK("fault address 0x%p eip 0x%p\n", vaddr, eip);
         printk("Segmentation Fault: Invalid memory access at 0x%p by task %s\n",
             vaddr, task->name);
 
@@ -757,6 +779,7 @@ void page_fault(u32 vector,
         assert(entry->present);
 
         if (entry->readonly) {
+            LOGK("fault address 0x%p eip 0x%p\n", vaddr, eip);
             printk("Segmentation Fault: Write to Read-Only page at 0x%p\n", vaddr);
             task_exit(-1);
             return;
@@ -764,7 +787,7 @@ void page_fault(u32 vector,
 
         assert(!entry->shared);  // not shared page
 
-        copy_on_write(vaddr, 3);
+        copy_on_write(vaddr);
         return;
     }
 
@@ -778,6 +801,7 @@ void page_fault(u32 vector,
         return;
     }
 
+    LOGK("fault address 0x%p eip 0x%p\n", vaddr, eip);
     LOGK("task 0x%p name %s brk 0x%p page fault\n", task, task->name, task->brk);
 
     panic("page fault!!!");

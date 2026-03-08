@@ -122,7 +122,7 @@ device_t *device_get(dev_t dev) {
 
 
 static void do_request(request_t *req) {
-    LOGK("dev %d do requset pba %d\n", req->dev, req->offset);
+    MM_TRACEK("dev %d do requset pba %d\n", req->dev, req->offset);
 
     switch (req->type) {
         case REQ_READ:
@@ -181,7 +181,7 @@ void device_request(dev_t dev, void *buf, u8 count, idx_t idx, int flags, u32 ty
     req->type = type;
     req->task = NULL;
 
-    LOGK("dev %d requset idx %d\n", req->dev, req->idx);
+    MM_TRACEK("dev %d requset idx %d\n", req->dev, req->idx);
 
     bool empty = list_empty(&device->request_list);
 

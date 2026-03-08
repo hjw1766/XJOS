@@ -12,6 +12,30 @@
 
 task_t *last_fpu_task = NULL;
 
+static u32 cr0_read() {
+    u32 cr0;
+    asm volatile("movl %%cr0, %%eax\n" : "=a"(cr0));
+    return cr0;
+}
+
+static void cr0_write(u32 cr0) {
+    asm volatile("movl %%eax, %%cr0\n" : : "a"(cr0));
+}
+
+static void fpu_set_ts() {
+    asm volatile(
+        "movl %%cr0, %%eax\n"
+        "orl %0, %%eax\n"
+        "movl %%eax, %%cr0\n"
+        :
+        : "i"(CR0_TS)
+        : "eax", "memory");
+}
+
+static void fpu_clear_ts() {
+    asm volatile("clts" ::: "memory");
+}
+
 bool fpu_check() {
     cpu_version_t ver;
     cpu_version(&ver);
@@ -34,19 +58,8 @@ bool fpu_check() {
     return ret == 0; // 如果状态被改为 0 则 FPU 可用
 }
 
-u32 get_cr0() {
-    u32 cr0;
-    asm volatile("movl %%cr0, %%eax\n" : "=a"(cr0));
-    return cr0;
-}
-
-void set_cr0(u32 cr0) {
-    asm volatile("movl %%eax, %%cr0\n" : : "a"(cr0));
-}
-
 void fpu_enable(task_t *task) {
-
-    set_cr0(get_cr0() & ~(CR0_EM | CR0_TS)); // 清除 EM 和 TS 位，启用 FPU
+    fpu_clear_ts();
 
     // 如果当前任务已经是 FPU 任务了，就不需要重复启用了
     if (last_fpu_task == task) {
@@ -79,7 +92,10 @@ void fpu_enable(task_t *task) {
 }
 
 void fpu_disable(task_t *task) {
-    set_cr0(get_cr0() | (CR0_EM | CR0_TS)); // 设置 EM 和 TS 位，禁用 FPU
+    (void)task;
+    if (!last_fpu_task)
+        return;
+    fpu_set_ts();
 }
 
 void fpu_handler(int vector) {
@@ -101,8 +117,8 @@ void fpu_init() {
     if(exist) {
         // 设置 FPU 异常处理函数
         set_exception_handler(INTR_NM, fpu_handler);
-        // 设置 CR0 寄存器
-        set_cr0(get_cr0() | CR0_EM | CR0_TS | CR0_NE);
+        // 硬件 FPU 存在时保留 EM=0，仅使用 TS 做惰性切换
+        cr0_write((cr0_read() & ~CR0_EM) | CR0_TS | CR0_NE);
     } else {
         LOGK("fpu not exists...\n");
     }

@@ -94,6 +94,7 @@ typedef struct floppy_t {
     task_t *waiter; // 等待进程
     timer_t *timer; // 定时器
     mutex_t lock;    // 锁
+    bool ready;
 
     char name[8];
     int type; // 软盘类型
@@ -126,6 +127,8 @@ typedef struct floppy_t {
 // 一个软盘
 static floppy_t floppy;
 
+static err_t fd_setup(floppy_t *fd);
+
 // 软盘中断处理函数
 static void fd_handler(int vector) {
     send_eoi(vector); // 发送中断结束信号；
@@ -154,7 +157,6 @@ static err_t fd_outb(u8 byte) {
         if (timer_is_expires(expire))
             return -ETIME;
         u8 msr = inb(FDC_MSR) & (MSR_READY | MSR_DIO);
-        LOGK("out state 0x%X %d %d...\n", msr, expire, jiffies);
         if (msr == MSR_READY) {
             outb(FDC_DATA, byte);
             return EOK;
@@ -375,6 +377,12 @@ static err_t fd_read(floppy_t *fd, void *buf, u8 count, idx_t lba) {
     assert(count + lba < (u32)fd->tracks * fd->heads * fd->sectors);
 
     mutex_lock(&fd->lock);
+
+    if (!fd->ready && fd_setup(fd) < EOK) {
+        mutex_unlock(&fd->lock);
+        return -EIO;
+    }
+
     fd_motor_on(fd);
 
     u8 left = count;
@@ -396,6 +404,12 @@ static err_t fd_write(floppy_t *fd, void *buf, u8 count, idx_t lba) {
     assert(count + lba < (u32)fd->tracks * fd->heads * fd->sectors);
 
     mutex_lock(&fd->lock);
+
+    if (!fd->ready && fd_setup(fd) < EOK) {
+        mutex_unlock(&fd->lock);
+        return -EIO;
+    }
+
     fd_motor_on(fd);
 
     u8 left = count;
@@ -436,6 +450,7 @@ static err_t fd_reset(floppy_t *fd) {
 static err_t fd_setup(floppy_t *fd) {
     fd_specify(fd);
     fd_recalibrate(fd);
+    fd->ready = true;
     return EOK;
 }
 
@@ -477,9 +492,7 @@ void floppy_init() {
 
     fd->drive = 0;
     fd->track = 0xFF;
-
-    if (fd_setup(fd) < EOK)
-        return;
+    fd->ready = false;
 
     device_install(
         DEV_BLOCK, DEV_FLOPPY, fd, fd->name, 0,

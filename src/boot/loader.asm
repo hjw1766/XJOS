@@ -3,7 +3,7 @@
 
 dw 0x55aa  ; assert magic number
 
-
+kernel_size: dd KERNEL_SIZE
 
 
 
@@ -102,11 +102,27 @@ protected_mode:
 
     mov esp, 0x10000  ; stack pointer
 
-    mov edi, 0x10000
-    mov ecx, 10
-    mov bl, 254
+    sub esp, 4 * 3 ; reserve space for 3 args
+    mov dword [esp], 0
+    mov dword [esp + 4], 10
+    mov dword [esp + 8], 0x10000
+    BLOCK_SIZE equ 200
+
+.read_block:
+    mov edi, [esp + 8]
+    mov ecx, [esp + 4]
+    mov bl, BLOCK_SIZE
     
     call read_disk
+
+    add dword [esp + 8], BLOCK_SIZE * 512
+    add dword [esp + 4], BLOCK_SIZE
+
+    mov eax, [kernel_size]
+    add dword [esp], BLOCK_SIZE * 512
+    cmp dword [esp], eax
+
+    jl .read_block
 
     mov eax, 0x20250901 ; magic number
     mov ebx, ards_count

@@ -91,6 +91,7 @@ typedef struct task_t {
     u32 blocked;                // 被阻塞的信号位图
     sigaction_t actions[MAXSIG];    // 信号处理函数数组
     struct timer_t *alarm;          // 定时器 (alarm)
+    struct timer_t *timer;          // 超时定时器
     struct fpu_t *fpu;                // FPU 状态指针 (如果 TASK_FPU_USED)
     u32 flags;                 // 任务标志 (task_flag_t)
 

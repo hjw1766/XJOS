@@ -112,6 +112,10 @@ $(BUILD_DIR)/boot/%.bin: $(SRC_DIR)/boot/%.asm
 	@echo "ASM		$<"
 	@$(ASM) -f bin $< -o $@
 
+$(BUILD_DIR)/boot/loader.bin: $(SRC_DIR)/boot/loader.asm $(BUILD_DIR)/system.bin
+	@mkdir -p $(dir $@)
+	@$(ASM) -f bin $< -o $@ -DKERNEL_SIZE=$$(stat -c%s "$(BUILD_DIR)/system.bin")
+
 # 2. 编译汇编代码 (Kernel & Libs)
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.asm
 	@mkdir -p $(dir $@)

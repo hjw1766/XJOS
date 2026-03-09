@@ -4,6 +4,7 @@ extern void timer_init();
 extern void memory_map_init();
 extern void mapping_init();
 extern void arena_init();
+extern void file_init();
 extern void task_init();
 extern void syscall_init();
 extern void tss_init();
@@ -33,10 +34,13 @@ void kernel_init() {
     // 3. 系统调用接口
     syscall_init();      // 注册所有的 sys_* 系统调用
 
-    // 4. 任务调度子系统初始化
+    // 4. 先初始化全局文件表，避免后续任务创建后再被清零
+    file_init();
+
+    // 5. 任务调度子系统初始化
     task_init();
 
-    // 5. 开启中断，将控制权正式移交给调度器
+    // 6. 开启中断，将控制权正式移交给调度器
     // 此时时钟中断开始触发，调度器会选中 init_thread 开始执行设备和文件系统的初始化
     set_interrupt_state(true);
 }

@@ -11,7 +11,7 @@ extern int sys_mknod(char *pathname, int mode, int dev);
 extern int sys_link(char *oldname, char *newname);
 
 void dev_init() {
-    sys_mkdir("/dev", 0755);
+    // sys_mkdir("/dev", 0755);
 
     device_t *device = NULL;
 

@@ -163,13 +163,16 @@ static u32 pci_size(u32 base, u32 mask) {
     return size;
 }
 
-int pci_find_bar(pci_device_t *device, pci_bar_t *bar, int type) {
+err_t pci_find_bar(pci_device_t *device, pci_bar_t *bar, int type) {
     for (size_t idx = 0; idx < PCI_BAR_NR; idx++) {
         u8 addr = PCI_CONF_BASE_ADDR0 + (idx << 2);
         u32 value = pci_inl(device->bus, device->dev, device->func, addr);
         pci_outl(device->bus, device->dev, device->func, addr, -1);
         u32 len = pci_inl(device->bus, device->dev, device->func, addr);
         pci_outl(device->bus, device->dev, device->func, addr, value);
+
+        if (value == 0)
+            continue;
 
         if (len == 0 || len == -1)
             continue;
@@ -180,15 +183,15 @@ int pci_find_bar(pci_device_t *device, pci_bar_t *bar, int type) {
         if ((value & 1) && type == PCI_BAR_TYPE_IO) {
             bar->iobase = value & PCI_BAR_IO_MASK;
             bar->size = pci_size(len, PCI_BAR_IO_MASK);
-            return 0;
+            return EOK;
         }
         if (!(value & 1) && type == PCI_BAR_TYPE_MEM) {
             bar->iobase = value & PCI_BAR_MEM_MASK;
             bar->size = pci_size(len, PCI_BAR_MEM_MASK);
-            return 0;
+            return EOK;
         }
     }
-    return EOF;
+    return -EIO;
 }
 
 const char *pci_classname(u32 classcode) {

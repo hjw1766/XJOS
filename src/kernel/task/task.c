@@ -104,7 +104,10 @@ err_t task_block(task_t *task, list_t *blist, task_state_t state, int timeout_ms
 
     // 超时逻辑
     if (timeout_ms > 0) {
+        assert(task->block_timer == NULL);
+        assert(task->timer == NULL); // 确保没有遗留的定时器
         task->block_timer = timer_add(timeout_ms, NULL, NULL, task);
+        task->timer = task->block_timer;
     }
     
     if (task == running_task()) schedule();
@@ -116,12 +119,14 @@ void task_unblock(task_t *task, int reason) {
     assert(!get_interrupt_state());
     if (task->node.next) list_remove(&task->node);
 
-    if (task->block_timer) {
-        timer_t *t = task->block_timer;
+    if (task->timer) {
+        timer_t *timer = task->timer;
+
+        task->timer = NULL;
         task->block_timer = NULL;
 
-        list_remove(&t->node);
-        kfree(t);
+        if (!timer->active)
+            timer_put(timer);
     }
 
     task->status = reason;
@@ -132,6 +137,7 @@ void task_unblock(task_t *task, int reason) {
     if (task->vruntime > bonus) task->vruntime -= bonus;
     else task->vruntime = 0;
 
+    assert(task->state != TASK_RUNNING);
     sched_wakeup_task(task);
 }
 
@@ -325,6 +331,10 @@ static task_t *task_create(target_t target, const char *name, int nice, u32 uid)
     task->sid = 0;  
     task->state = TASK_READY;
     task->magic = XJOS_MAGIC; 
+
+    task->block_timer = NULL;
+    task->timer = NULL;
+    task->alarm = NULL;
     
     // 内核线程共享内核页表和位图
     task->vmap = &kernel_map;

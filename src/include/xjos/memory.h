@@ -86,4 +86,7 @@ page_entry_t *copy_pde();
 
 void free_pde();
 
+// get vaddr's paddr
+u32 get_paddr(u32 vaddr);
+
 #endif /* XJOS_MEMORY_H */

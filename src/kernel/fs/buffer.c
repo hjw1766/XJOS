@@ -172,7 +172,7 @@ buffer_t *bread(dev_t dev, idx_t block) {
     mutex_lock(&bf->lock);
     if (!bf->valid) {
         // read disk
-        device_request(bf->dev, bf->data, BLOCK_SECS, bf->block * BLOCK_SECS, 0, REQ_READ);
+        assert(device_request(bf->dev, bf->data, BLOCK_SECS, bf->block * BLOCK_SECS, 0, REQ_READ) == 0);
 
         bf->dirty = false;
         bf->valid = true;
@@ -194,7 +194,7 @@ void bwrite(buffer_t *bf) {
     }
 
     // write to disk
-    device_request(bf->dev, bf->data, BLOCK_SECS, bf->block * BLOCK_SECS, 0, REQ_WRITE);
+    assert(device_request(bf->dev, bf->data, BLOCK_SECS, bf->block * BLOCK_SECS, 0, REQ_WRITE) == 0);
 
     bdirty(bf, false);
     bf->valid = true;

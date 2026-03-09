@@ -11,6 +11,7 @@
 
 
 task_t *last_fpu_task = NULL;
+static bool cr0_ts_set = false;
 
 static u32 cr0_read() {
     u32 cr0;
@@ -23,6 +24,9 @@ static void cr0_write(u32 cr0) {
 }
 
 static void fpu_set_ts() {
+    if (cr0_ts_set)
+        return;
+
     asm volatile(
         "movl %%cr0, %%eax\n"
         "orl %0, %%eax\n"
@@ -30,10 +34,16 @@ static void fpu_set_ts() {
         :
         : "i"(CR0_TS)
         : "eax", "memory");
+
+    cr0_ts_set = true;
 }
 
 static void fpu_clear_ts() {
+    if (!cr0_ts_set)
+        return;
+
     asm volatile("clts" ::: "memory");
+    cr0_ts_set = false;
 }
 
 bool fpu_check() {
@@ -79,6 +89,7 @@ void fpu_enable(task_t *task) {
     // 任务第一次使用 FPU，需要初始化它的状态
     if (task->fpu) {
         asm volatile("frstor (%%eax) \n" ::"a"(task->fpu));
+        task->flags |= (TASK_FPU_ENABLED | TASK_FPU_USED);
     } else {
 
         asm volatile(
@@ -119,6 +130,7 @@ void fpu_init() {
         set_exception_handler(INTR_NM, fpu_handler);
         // 硬件 FPU 存在时保留 EM=0，仅使用 TS 做惰性切换
         cr0_write((cr0_read() & ~CR0_EM) | CR0_TS | CR0_NE);
+        cr0_ts_set = true;
     } else {
         LOGK("fpu not exists...\n");
     }

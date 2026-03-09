@@ -43,7 +43,6 @@ void init_thread() {
 
     // 3. 文件系统核心初始化 (必须在块设备就绪后进行)
     buffer_init();   // 初始化高速缓冲 (依赖底层的块设备读写)
-    file_init();     // 初始化文件表
     inode_init();    // 初始化 inode 缓存
     super_init();    // 初始化并挂载超级块 (解析磁盘上的文件系统结构)
     dcache_init();     // 初始化目录项缓存 (依赖超级块和 inode)

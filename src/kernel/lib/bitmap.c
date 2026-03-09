@@ -53,22 +53,34 @@ void bitmap_set(bitmap_t *map, idx_t index, bool value) {
 
 int bitmap_scan(bitmap_t *map, u32 count) {
     int start = EOF;
-    u32 bits_left = map->length * 8;    // all bits
-    u32 next_bit = 0;   
+    u32 total_bits = map->length * 8;
+    u32 next_bit = 0;
     u32 counter = 0;
 
-    while (bits_left-- > 0) {
-        if (!bitmap_test(map, map->offset + next_bit))
-            counter++;      // next_bits Available
-        else
+    if (!count || count > total_bits)
+        return EOF;
+
+    while (next_bit < total_bits) {
+        u32 byte_idx = next_bit / 8;
+        u8 byte = map->bits[byte_idx];
+
+        if (byte == 0xFF) {
             counter = 0;
+            next_bit = (byte_idx + 1) * 8;
+            continue;
+        }
 
-        next_bit++;
+        for (u8 bit_idx = next_bit % 8; bit_idx < 8 && next_bit < total_bits; bit_idx++, next_bit++) {
+            if (!(byte & (1 << bit_idx)))
+                counter++;
+            else
+                counter = 0;
 
-        // find Continuous count bits, set start, break
-        if (counter == count) {
-            start = next_bit - count;
-            break;
+            // find Continuous count bits, set start, break
+            if (counter == count) {
+                start = next_bit + 1 - count;
+                goto found;
+            }
         }
     }
 
@@ -76,11 +88,11 @@ int bitmap_scan(bitmap_t *map, u32 count) {
     if (start == EOF)
         return EOF;
 
-    bits_left = count;  // need set bits count
-    next_bit = start;   
+found:
+    next_bit = start;
 
-    while (bits_left-- > 0) {
-        bitmap_set(map, map->offset + next_bit, true);
+    for (u32 bits_left = count; bits_left > 0; bits_left--) {
+        map->bits[next_bit / 8] |= (1 << (next_bit % 8));
         next_bit++;
     }
 

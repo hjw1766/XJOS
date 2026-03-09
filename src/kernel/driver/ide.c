@@ -24,8 +24,11 @@
 #define IDE_FEATURE 0x0001  // Feature Register (Write)
 #define IDE_SECTOR 0x0002   // Sector Count Register
 #define IDE_LBA_LOW 0x0003  // LBA Low Byte Register
+#define IDE_CHS_SECTOR 0x0003 // CHS Sector location
 #define IDE_LBA_MID 0x0004  // LBA Mid Byte Register
+#define IDE_CHS_CYL 0x0004    // CHS Cylinder low byte
 #define IDE_LBA_HIGH 0x0005 // LBA High Byte Register
+#define IDE_CHS_CYH 0x0005    // CHS Cylinder high byte
 #define IDE_HDDEVSEL 0x0006 // Drive/Head Select Register
 #define IDE_STATUS 0x0007   // Status Register (Read)
 #define IDE_COMMAND 0x0007  // Command Register (Write)
@@ -39,6 +42,7 @@
 #define IDE_CMD_READ 0x20     // Read Sectors
 #define IDE_CMD_WRITE 0x30    // Write Sectors
 #define IDE_CMD_IDENTIFY 0xEC // Identify Drive
+#define IDE_CMD_DIAGNOSTIC 0x90 // Run Diagnostics
 
 // IDE Status Register Bits (read from IDE_STATUS or IDE_ALT_STATUS)
 #define IDE_SR_NULL 0x00 // NULL
@@ -69,6 +73,11 @@
 // Values for IDE_HDDEVSEL register (Drive Select)
 #define IDE_LBA_MASTER 0b11100000 // LBA Mode, Master Drive (0xE0)
 #define IDE_LBA_SLAVE 0b11110000  // LBA Mode, Slave Drive (0xF0)
+#define IDE_SEL_MASK 0b10110000   // CHS Mode MASK
+
+#define IDE_INTERFACE_UNKNOWN 0
+#define IDE_INTERFACE_ATA 1
+#define IDE_INTERFACE_ATAPI 2
 
 typedef enum PART_FS {
     PART_FS_FAT12 = 1,      // fat 12
@@ -177,57 +186,66 @@ static u32 ide_busy_wait(ide_ctrl_t *ctrl, u8 mask) {
 }
 
 
+// disk delay
+static void ide_delay() {
+    task_sleep(25);     // wait for 25ms, enough for most operations to complete
+}
+
+
 // disk reset
 static void ide_reset_controller(ide_ctrl_t *ctrl) {
     outb(ctrl->iobase + IDE_CONTROL, IDE_CTRL_SRST);
-    ide_busy_wait(ctrl, IDE_SR_NULL);
+    ide_delay();
     outb(ctrl->iobase + IDE_CONTROL, ctrl->control);
     ide_busy_wait(ctrl, IDE_SR_NULL);
 }
 
 
+static void ide_select_device(ide_disk_t *disk, u8 devsel) {
+    ide_ctrl_t *ctrl = disk->ctrl;
+    if (ctrl->active == disk && ctrl->devsel == devsel)
+        return;
+
+    outb(ctrl->iobase + IDE_HDDEVSEL, devsel);
+    ctrl->active = disk;
+    ctrl->devsel = devsel;
+}
+
+
 // select disk
 static void ide_select_drive(ide_disk_t *disk) {
-    // 0x1F6  <- 0xE0(master) / 0xF0(slave)
-    outb(disk->ctrl->iobase + IDE_HDDEVSEL, disk->selector);
-    disk->ctrl->active = disk;
+    ide_select_device(disk, disk->selector);
 }
 
 
 // select sector
 static void ide_select_sector(ide_disk_t *disk, u32 lba, u8 count) {
+    ide_ctrl_t *ctrl = disk->ctrl;
+
     // functional reg
-    outb(disk->ctrl->iobase + IDE_FEATURE, 0);
+    outb(ctrl->iobase + IDE_FEATURE, 0);
 
     // 0x1F2 <- count
-    outb(disk->ctrl->iobase + IDE_SECTOR, count);
+    outb(ctrl->iobase + IDE_SECTOR, count);
     
     // LBA address 0-23
-    outb(disk->ctrl->iobase + IDE_LBA_LOW, lba & 0xFF);
-    outb(disk->ctrl->iobase + IDE_LBA_MID, (lba >> 8) & 0xFF);
-    outb(disk->ctrl->iobase + IDE_LBA_HIGH, (lba >> 16) & 0xFF);
-
-    // 24 - 27 | select(mode 'master or slave')
-    outb(disk->ctrl->iobase + IDE_HDDEVSEL, ((lba >> 24) & 0xf) | disk->selector);
-
-    disk->ctrl->active = disk;
+    outb(ctrl->iobase + IDE_LBA_LOW, lba & 0xFF);
+    outb(ctrl->iobase + IDE_LBA_MID, (lba >> 8) & 0xFF);
+    outb(ctrl->iobase + IDE_LBA_HIGH, (lba >> 16) & 0xFF);
 }
 
 
 // read -> buf
 static void ide_pio_read_sector(ide_disk_t *disk, u16 *buf) {
-    // sector 512 bytes, once read 2 bytes
-    for (size_t i = 0; i < (SECTOR_SIZE / 2); i++) {
-        buf[i] = inw(disk->ctrl->iobase + IDE_DATA);
-    }
+    u16 port = disk->ctrl->iobase + IDE_DATA;
+    asm volatile("cld; rep insw" : "+D"(buf) : "d"(port), "c"(SECTOR_SIZE / 2) : "memory");
 }
 
 
 // write -> buf
 static void ide_pio_write_sector(ide_disk_t *disk, u16 *buf) {
-    for (size_t i = 0; i < (SECTOR_SIZE / 2); i++) {
-        outw(disk->ctrl->iobase + IDE_DATA, buf[i]);
-    }
+    u16 port = disk->ctrl->iobase + IDE_DATA;
+    asm volatile("cld; rep outsw" : : "S"(buf), "d"(port), "c"(SECTOR_SIZE / 2) : "memory");
 }
 
 
@@ -255,7 +273,7 @@ int ide_pio_read(ide_disk_t *disk, void *buf, u8 count, idx_t lba) {
 
     // lock -  select disk - wait - select sector
     // send read cmd - unlock
-    ide_select_drive(disk);
+    ide_select_device(disk, ((lba >> 24) & 0xf) | disk->selector);
 
     ide_busy_wait(ctrl, IDE_SR_DRDY);
 
@@ -291,7 +309,7 @@ int ide_pio_write(ide_disk_t *disk, void *buf, u8 count, idx_t lba) {
 
     MM_TRACEK("write lab 0x%x\n", lba);
 
-    ide_select_drive(disk);
+    ide_select_device(disk, ((lba >> 24) & 0xf) | disk->selector);
     ide_busy_wait(ctrl, IDE_SR_DRDY);
     ide_select_sector(disk, lba, count);
     outb(ctrl->iobase + IDE_COMMAND, IDE_CMD_WRITE);
@@ -341,8 +359,58 @@ int ide_pio_part_wrtie(ide_part_t *part, void *buf, u8 count, idx_t lba) {
 }
 
 
+// detect dev
+static err_t ide_probe_device(ide_disk_t *disk) {
+    outb(disk->ctrl->iobase + IDE_HDDEVSEL, disk->selector & IDE_SEL_MASK);
+    ide_delay();
+
+    outb(disk->ctrl->iobase + IDE_SECTOR, 0x55);
+    outb(disk->ctrl->iobase + IDE_CHS_SECTOR, 0xAA);
+
+    outb(disk->ctrl->iobase + IDE_SECTOR, 0xAA);
+    outb(disk->ctrl->iobase + IDE_CHS_SECTOR, 0x55);
+
+    outb(disk->ctrl->iobase + IDE_SECTOR, 0x55);
+    outb(disk->ctrl->iobase + IDE_CHS_SECTOR, 0xAA);
+
+    u8 sector_count = inb(disk->ctrl->iobase + IDE_SECTOR);
+    u8 sector_index = inb(disk->ctrl->iobase + IDE_CHS_SECTOR);
+
+    if (sector_count == 0x55 && sector_index == 0xAA)
+        return EOK;
+    return -EIO;
+}
+
+
+// check disk interface type
+static int ide_interface_type(ide_disk_t *disk) {
+    outb(disk->ctrl->iobase + IDE_COMMAND, IDE_CMD_DIAGNOSTIC);
+    ide_busy_wait(disk->ctrl, IDE_SR_NULL);
+
+    outb(disk->ctrl->iobase + IDE_HDDEVSEL, disk->selector & IDE_SEL_MASK);
+    ide_delay();
+
+    u8 sector_count = inb(disk->ctrl->iobase + IDE_SECTOR);
+    u8 sector_index = inb(disk->ctrl->iobase + IDE_LBA_LOW);
+    if (sector_count != 1 || sector_index != 1)
+        return IDE_INTERFACE_UNKNOWN;
+
+    u8 cylinder_low = inb(disk->ctrl->iobase + IDE_CHS_CYL);
+    u8 cylinder_high = inb(disk->ctrl->iobase + IDE_CHS_CYH);
+    u8 state = inb(disk->ctrl->iobase + IDE_STATUS);
+
+    if (cylinder_low == 0x14 && cylinder_high == 0xeb)
+        return IDE_INTERFACE_ATAPI;
+
+    if (cylinder_low == 0 && cylinder_high == 0 && state != 0)
+        return IDE_INTERFACE_ATA;
+
+    return IDE_INTERFACE_UNKNOWN;
+}
+
+
 // Big-endian to little-endian
-static void ide_swap_pairs(char *buf, u32 len) {
+static void ide_fixstrings(char *buf, u32 len) {
     for (size_t i = 0; i < len; i += 2) {
         // swap pairs of bytes
         register char ch = buf[i];
@@ -376,13 +444,13 @@ static u32 ide_identify(ide_disk_t *disk, u16 *buf) {
     if (params->total_lba == 0) // LBA total sectors == 0
         goto rollback;
 
-    ide_swap_pairs(params->serial, sizeof(params->serial));
+    ide_fixstrings(params->serial, sizeof(params->serial));
     LOGK("disk %s serial number %s\n", disk->name, params->serial);
 
-    ide_swap_pairs(params->firmware, sizeof(params->firmware));
+    ide_fixstrings(params->firmware, sizeof(params->firmware));
     LOGK("disk %s firmware version %s\n", disk->name, params->firmware);
 
-    ide_swap_pairs(params->model, sizeof(params->model));
+    ide_fixstrings(params->model, sizeof(params->model));
     LOGK("disk %s model number %s\n", disk->name, params->model);
 
     disk->total_lba = params->total_lba;
@@ -456,6 +524,7 @@ static void ide_ctrl_init() {
         sprintf(ctrl->name, "ide%u", cidx); // ide0 ide1
         mutex_init(&ctrl->lock);
         ctrl->active = NULL;
+        ctrl->devsel = 0xFF;
         ctrl->waiter = NULL;
 
         if (cidx) {
@@ -481,8 +550,23 @@ static void ide_ctrl_init() {
                 disk->master = true;
                 disk->selector = IDE_LBA_MASTER;
             }
-            ide_identify(disk, buf);
-            ide_part_init(disk, buf);
+
+            if (ide_probe_device(disk) < 0) {
+                LOGK("IDE device %s not exists...\n", disk->name);
+                continue;
+            }
+
+            disk->interface = ide_interface_type(disk);
+            LOGK("IDE device %s type %d...\n", disk->name, disk->interface);
+            if (disk->interface == IDE_INTERFACE_UNKNOWN)
+                continue;
+
+            if (disk->interface == IDE_INTERFACE_ATA) {
+                ide_identify(disk, buf);
+                ide_part_init(disk, buf);
+            } else if (disk->interface == IDE_INTERFACE_ATAPI) {
+                LOGK("Disk %s interface is ATAPI\n", disk->name);
+            }
         }
     }
     free_kpage((u32)buf, 1);
@@ -497,11 +581,12 @@ static void ide_install() {
 
             if (!disk->total_lba)   // disk died
                 continue;
-            dev_t dev = device_install(
-                DEV_BLOCK, DEV_IDE_DISK, 
-                disk, disk->name, 0, 
-                ide_pio_ioctl, ide_pio_read,
-                ide_pio_write);
+            if (disk->interface == IDE_INTERFACE_ATA) {
+                dev_t dev = device_install(
+                    DEV_BLOCK, DEV_IDE_DISK, 
+                    disk, disk->name, 0, 
+                    ide_pio_ioctl, ide_pio_read,
+                    ide_pio_write);
             
             for (size_t i = 0; i < IDE_PART_NR; i++) {
                 ide_part_t *part = &disk->parts[i];
@@ -512,6 +597,7 @@ static void ide_install() {
                     ide_pio_part_ioctl, ide_pio_part_read, 
                     ide_pio_part_wrtie);
             }     
+        }
         }
     }
 }

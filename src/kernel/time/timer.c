@@ -20,7 +20,18 @@ static timer_t *timer_get() {
     return timer;
 }
 
+static void timer_cancel(timer_t **slot) {
+    timer_t *timer = *slot;
+    if (!timer)
+        return;
+
+    *slot = NULL;
+    timer_put(timer);
+}
+
 void timer_put(timer_t *timer) {
+    if (!timer)
+        return;
     list_remove(&timer->node);
     kfree(timer);
 }
@@ -75,8 +86,10 @@ void timer_init() {
 
 // 从定时器链表中找到task相关的定时器
 void timer_remove(task_t *task) {
-    list_t *list = &timer_list;
+    timer_cancel(&task->block_timer);
+    timer_cancel(&task->alarm);
 
+    list_t *list = &timer_list;
     for(list_node_t *ptr = list->head.next; ptr != &list->head;) {
         timer_t *timer = element_entry(timer_t, node, ptr);
         ptr = ptr->next;

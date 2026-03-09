@@ -47,6 +47,7 @@ typedef struct ide_disk_t {
     u32 cylinders;               // cylinder count
     u32 heads;                   // head count
     u32 sectors;                 // sector count
+    u32 interface;             // 0: PIO, 1: DMA, 2: LBA48
     ide_part_t parts[IDE_PART_NR]; // disk partition
 }ide_disk_t;
 
@@ -56,6 +57,7 @@ typedef struct ide_ctrl_t {
     u16 iobase;                     // IO reg base
     ide_disk_t disks[IDE_DISK_NR];  // disk
     ide_disk_t *active;             // current select disk
+    u8 devsel;                      // cached HDDEVSEL value
     u8 control;                     // control Byte
     task_t *waiter;          // waiting task
 }ide_ctrl_t;

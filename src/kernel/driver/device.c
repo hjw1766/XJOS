@@ -121,15 +121,15 @@ device_t *device_get(dev_t dev) {
 }
 
 
-static void do_request(request_t *req) {
+static int do_request(request_t *req) {
     MM_TRACEK("dev %d do requset pba %d\n", req->dev, req->offset);
 
     switch (req->type) {
         case REQ_READ:
-            device_read(req->dev, req->buf, req->count, req->offset, req->flags);
+            return device_read(req->dev, req->buf, req->count, req->offset, req->flags);
             break;
         case REQ_WRITE:
-            device_write(req->dev, req->buf, req->count, req->offset, req->flags);
+            return device_write(req->dev, req->buf, req->count, req->offset, req->flags);
             break;
         default:
             panic("req type %d unknown!!!\n", req->dev);
@@ -161,7 +161,7 @@ static request_t *request_nextreq(device_t *device, request_t *req) {
 }
 
 
-void device_request(dev_t dev, void *buf, u8 count, idx_t idx, int flags, u32 type) {
+err_t device_request(dev_t dev, void *buf, u8 count, idx_t idx, int flags, u32 type) {
     device_t *device = device_get(dev);
     assert(device->type == DEV_BLOCK);
 
@@ -192,10 +192,10 @@ void device_request(dev_t dev, void *buf, u8 count, idx_t idx, int flags, u32 ty
 
     if (!empty) {   // wait for device idle
         req->task = running_task();
-        task_block(req->task, NULL, TASK_BLOCKED, TIMELESS);
+        assert(task_block(req->task, NULL, TASK_BLOCKED, TIMELESS) == 0);
     }
 
-    do_request(req);    // do req
+    err_t ret = do_request(req);    // do req
 
     request_t *nextreq = request_nextreq(device, req);
     list_remove(&req->node);    // remove req from device reqlist
@@ -206,4 +206,5 @@ void device_request(dev_t dev, void *buf, u8 count, idx_t idx, int flags, u32 ty
         assert(nextreq->task->magic == XJOS_MAGIC);
         task_unblock(nextreq->task, EOK);   // wake up next req task
     }
+    return ret;
 }

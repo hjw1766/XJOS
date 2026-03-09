@@ -94,6 +94,6 @@ int device_read(dev_t dev, void *buf, size_t count, idx_t idx, int flags);
 int device_write(dev_t dev, void *buf, size_t count, idx_t idx, int flags);
 
 // block dev req
-void device_request(dev_t dev, void *buf, u8 count, idx_t idx, int flags, u32 type);
+err_t device_request(dev_t dev, void *buf, u8 count, idx_t idx, int flags, u32 type);
 
 #endif /* XJOS_DEVICE_H */

@@ -2,6 +2,7 @@
 #include <xjos/string.h>
 #include <drivers/device.h>
 #include <xjos/stdio.h>
+#include <xjos/errno.h>
 #include <xjos/assert.h>
 #include <xjos/debug.h>
 
@@ -35,7 +36,7 @@ int ramdisk_read(ramdisk_t *disk, void *buf, u8 count, idx_t lba) {
     u32 len = count * SECTOR_SIZE;
     assert(((u32)addr + len) < ((u32)disk->start + disk->size));
     memcpy(buf, addr, len);
-    return count;
+    return EOK;
 }
 
 int ramdisk_write(ramdisk_t *disk, void *buf, u8 count, idx_t lba) {
@@ -43,7 +44,7 @@ int ramdisk_write(ramdisk_t *disk, void *buf, u8 count, idx_t lba) {
     u32 len = count * SECTOR_SIZE;
     assert(((u32)addr + len) < ((u32)disk->start + disk->size));
     memcpy(addr, buf, len);
-    return count;
+    return EOK;
 }
 
 void ramdisk_init() {

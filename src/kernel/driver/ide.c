@@ -9,10 +9,13 @@
 #include <xjos/debug.h>
 #include <xjos/assert.h>
 #include <drivers/device.h>
+#include <xjos/timer.h>
 #include <xjos/errno.h>
 
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
+
+#define IDE_TIMEOUT 60000
 
 // IDE Reg Addresses
 #define IDE_IOBASE_PRIMARY 0x1F0    // master
@@ -130,6 +133,8 @@ typedef struct ide_params_t
 
 ide_ctrl_t controllers[IDE_CTRL_NR];
 
+static int ide_reset_controller(ide_ctrl_t *ctrl);
+
 static void ide_handler(int vector) {
     send_eoi(vector);
 
@@ -145,6 +150,12 @@ static void ide_handler(int vector) {
         task_unblock(ctrl->waiter, EOK);
         ctrl->waiter = NULL;
     }
+}
+
+
+// disk delay
+static void ide_delay() {
+    task_sleep(1);     // wait for 25ms, enough for most operations to complete
 }
 
 
@@ -171,33 +182,39 @@ static void ide_error(ide_ctrl_t *ctrl) {
 
 
 // c -> asm .wait
-static u32 ide_busy_wait(ide_ctrl_t *ctrl, u8 mask) {
+static err_t ide_busy_wait(ide_ctrl_t *ctrl, u8 mask, int timeout_ms) {
+    int expires = timer_expire_jiffies(timeout_ms);
+
     while (true) {
+        if (timeout_ms > 0 && timer_is_expires(expires)) {
+            LOGK("ide busy wait timeout\n");
+            return -ETIME;
+        }
+
         u8 state = inb(ctrl->iobase + IDE_ALT_STATUS);
-        if (state & IDE_SR_ERR) // error
+        if (state & IDE_SR_ERR) { // error
             ide_error(ctrl);
+            ide_reset_controller(ctrl);
+            return -EIO;
+        }
         
-        if (state & IDE_SR_BSY) // dv busy
+        if (state & IDE_SR_BSY) { // dv busy
+            ide_delay();
             continue;
+        }
         
         if ((state & mask) == mask) // wait state done
-            return 0;
+            return EOK;
     }      
 }
 
 
-// disk delay
-static void ide_delay() {
-    task_sleep(25);     // wait for 25ms, enough for most operations to complete
-}
-
-
 // disk reset
-static void ide_reset_controller(ide_ctrl_t *ctrl) {
+static err_t ide_reset_controller(ide_ctrl_t *ctrl) {
     outb(ctrl->iobase + IDE_CONTROL, IDE_CTRL_SRST);
     ide_delay();
     outb(ctrl->iobase + IDE_CONTROL, ctrl->control);
-    ide_busy_wait(ctrl, IDE_SR_NULL);
+    return ide_busy_wait(ctrl, IDE_SR_NULL, IDE_TIMEOUT);
 }
 
 
@@ -271,31 +288,38 @@ int ide_pio_read(ide_disk_t *disk, void *buf, u8 count, idx_t lba) {
 
     mutex_lock(&ctrl->lock);
 
+    int ret = -EIO;
+
     // lock -  select disk - wait - select sector
     // send read cmd - unlock
     ide_select_device(disk, ((lba >> 24) & 0xf) | disk->selector);
 
-    ide_busy_wait(ctrl, IDE_SR_DRDY);
+    if((ret = ide_busy_wait(ctrl, IDE_SR_DRDY, IDE_TIMEOUT)) < EOK)
+        goto rollback;
 
     ide_select_sector(disk, lba, count);
 
     outb(ctrl->iobase + IDE_COMMAND, IDE_CMD_READ);
-
+    
+    task_t *task = running_task();
     for (size_t i = 0; i < count; i++) {
-        task_t *task = running_task();
         ctrl->waiter = task;
-        assert(task_block(task, NULL, TASK_BLOCKED, TIMELESS) == EOK);
+        if ((ret = task_block(task, NULL, TASK_BLOCKED, IDE_TIMEOUT)) < EOK)
+            goto rollback;
 
         // DRQ, cpu ready to receive data
-        ide_busy_wait(ctrl, IDE_SR_DRQ);
+        if ((ret = ide_busy_wait(ctrl, IDE_SR_DRQ, IDE_TIMEOUT)) < EOK)
+            goto rollback;
         // sector i
         u32 offset = ((u32)buf + i * SECTOR_SIZE);
         ide_pio_read_sector(disk, (u16 *)offset);
     }
+    ret = EOK;
 
+rollback:
     mutex_unlock(&ctrl->lock);
 
-    return 0;
+    return ret;
 }
 
 
@@ -307,29 +331,36 @@ int ide_pio_write(ide_disk_t *disk, void *buf, u8 count, idx_t lba) {
 
     mutex_lock(&ctrl->lock);
 
+    int ret = EOK;
+
     MM_TRACEK("write lab 0x%x\n", lba);
 
     ide_select_device(disk, ((lba >> 24) & 0xf) | disk->selector);
-    ide_busy_wait(ctrl, IDE_SR_DRDY);
+    if((ret = ide_busy_wait(ctrl, IDE_SR_DRDY, IDE_TIMEOUT)) < EOK)
+        goto rollback;
     ide_select_sector(disk, lba, count);
     outb(ctrl->iobase + IDE_COMMAND, IDE_CMD_WRITE);
 
+    task_t *task = running_task();
     for (size_t i = 0; i < count; i++) {
         
         u32 offset = ((u32)buf + i * SECTOR_SIZE);
         ide_pio_write_sector(disk, (u16 *)offset);
         
-        task_t *task = running_task();
         ctrl->waiter = task;
-        assert(task_block(task, NULL, TASK_BLOCKED, TIMELESS) == EOK);
+        if ((ret = task_block(task, NULL, TASK_BLOCKED, IDE_TIMEOUT)) < EOK)
+            goto rollback;
 
         // wait for BSY = 1
-        ide_busy_wait(ctrl, IDE_SR_NULL);
+        if ((ret = ide_busy_wait(ctrl, IDE_SR_NULL, IDE_TIMEOUT)) < EOK)
+            goto rollback;
     }
-    
+    ret = EOK;
+
+rollback:    
     mutex_unlock(&ctrl->lock);
 
-    return 0;
+    return ret;
 }
 
 
@@ -385,7 +416,8 @@ static err_t ide_probe_device(ide_disk_t *disk) {
 // check disk interface type
 static int ide_interface_type(ide_disk_t *disk) {
     outb(disk->ctrl->iobase + IDE_COMMAND, IDE_CMD_DIAGNOSTIC);
-    ide_busy_wait(disk->ctrl, IDE_SR_NULL);
+    if(ide_busy_wait(disk->ctrl, IDE_SR_NULL, IDE_TIMEOUT) < EOK)
+        return IDE_INTERFACE_UNKNOWN;
 
     outb(disk->ctrl->iobase + IDE_HDDEVSEL, disk->selector & IDE_SEL_MASK);
     ide_delay();
@@ -423,7 +455,7 @@ static void ide_fixstrings(char *buf, u32 len) {
 
 
 // Identify disk
-static u32 ide_identify(ide_disk_t *disk, u16 *buf) {
+static err_t ide_identify(ide_disk_t *disk, u16 *buf) {
     LOGK("identifing disk %s...\n", disk->name);
 
     /*
@@ -431,18 +463,16 @@ static u32 ide_identify(ide_disk_t *disk, u16 *buf) {
     */
     mutex_lock(&disk->ctrl->lock);
     ide_select_drive(disk);
+
+    int ret = EOK;
+
     outb(disk->ctrl->iobase + IDE_COMMAND, IDE_CMD_IDENTIFY);
-    ide_busy_wait(disk->ctrl, IDE_SR_NULL);
+    if(ide_busy_wait(disk->ctrl, IDE_SR_NULL, IDE_TIMEOUT) < EOK)
+        goto rollback;
     
     ide_params_t *params = (ide_params_t *)buf;
     // read 512 bytes -> buf
     ide_pio_read_sector(disk, buf);
-
-    LOGK("disk %s total lba %d\n", disk->name, params->total_lba);
-
-    int8 ret = EOF;
-    if (params->total_lba == 0) // LBA total sectors == 0
-        goto rollback;
 
     ide_fixstrings(params->serial, sizeof(params->serial));
     LOGK("disk %s serial number %s\n", disk->name, params->serial);
@@ -453,11 +483,18 @@ static u32 ide_identify(ide_disk_t *disk, u16 *buf) {
     ide_fixstrings(params->model, sizeof(params->model));
     LOGK("disk %s model number %s\n", disk->name, params->model);
 
+    if (params->total_lba == 0) {
+        ret = -EIO;
+        goto rollback;
+    }
+    LOGK("disk %s total lba %d\n", disk->name, params->total_lba);
+
+
     disk->total_lba = params->total_lba;
     disk->cylinders = params->cylinders;
     disk->heads = params->heads;
     disk->sectors = params->sectors;
-    ret = 0;
+    ret = EOK;
 
 rollback:
     mutex_unlock(&disk->ctrl->lock);

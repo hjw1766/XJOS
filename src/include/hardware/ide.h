@@ -11,6 +11,9 @@
 #define IDE_DISK_NR 2
 #define IDE_PART_NR 4   // mbr max partition number
 
+#define IDE_TYPE_PIO 0  // PIO mode
+#define IDE_TYPE_DMA 1  // Ultra DMA
+
 typedef struct part_entry_t {
     u8 bootable;           // bootable flag
     u8 start_head;         // start head
@@ -38,11 +41,17 @@ typedef struct ide_part_t {
     u32 count;                  // use sector count
 }ide_part_t;
 
+typedef struct ide_prd_t {
+    u32 addr;
+    u32 len;
+} ide_prd_t;
+
 typedef struct ide_disk_t {
     char name[8];               // disk name
     struct ide_ctrl_t *ctrl;    // ctrl pointer
     u8 selector;                // disk select
     bool master;                // master disk
+    bool dma;                   // disk DMA enabled
     u32 total_lba;               // total lba count
     u32 cylinders;               // cylinder count
     u32 heads;                   // head count
@@ -54,12 +63,15 @@ typedef struct ide_disk_t {
 typedef struct ide_ctrl_t {
     char name[8];                   // ctrl name
     mutex_t lock;                   // lock
+    int iotype;                     // 0: PIO, 1: DMA
     u16 iobase;                     // IO reg base
+    u16 bmbase;                     // PCI bus master reg base
     ide_disk_t disks[IDE_DISK_NR];  // disk
     ide_disk_t *active;             // current select disk
     u8 devsel;                      // cached HDDEVSEL value
     u8 control;                     // control Byte
-    task_t *waiter;          // waiting task
+    task_t *waiter;                 // waiting task
+    ide_prd_t prd;                  // Physical Region Descriptor
 }ide_ctrl_t;
 
 int ide_pio_read(ide_disk_t *disk, void *buf, u8 count, idx_t lba);

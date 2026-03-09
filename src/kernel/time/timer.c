@@ -87,6 +87,7 @@ void timer_init() {
 // 从定时器链表中找到task相关的定时器
 void timer_remove(task_t *task) {
     timer_cancel(&task->block_timer);
+    task->timer = NULL;
     timer_cancel(&task->alarm);
 
     list_t *list = &timer_list;
@@ -114,6 +115,8 @@ bool timer_wakeup() {
         // 2.切断与任务的关系
         if (timer->task && timer->task->block_timer == timer)
             timer->task->block_timer = NULL;
+        if (timer->task && timer->task->timer == timer)
+            timer->task->timer = NULL;
 
         // 3.回调
         if (timer->handler) {

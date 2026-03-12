@@ -196,6 +196,7 @@ $(BUILD_DIR)/system.map: $(BUILD_DIR)/kernel.bin
 
 
 include $(SRC_DIR)/utils/image.mk
+include $(SRC_DIR)/utils/net.mk
 include $(SRC_DIR)/utils/cmd.mk
 
 clean:

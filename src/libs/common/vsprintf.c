@@ -140,6 +140,8 @@ int vsprintf(char *buf, const char *fmt, va_list args) {
     int *ip;
     u32 num;
 
+    u8 *ptr;
+
     for (str = buf; *fmt; ++fmt) {
         if (*fmt != '%') {
             *str++ = *fmt;
@@ -233,6 +235,33 @@ int vsprintf(char *buf, const char *fmt, va_list args) {
                 flags |= SIGN | DOUBLE;
                 double dnum = va_arg(args, double);
                 str = number(str, (u32 *)&dnum, 10, field_width, precision, flags);
+                break;
+                
+            case 'b':
+                num = va_arg(args, unsigned long);
+                str = number(str, &num, 2, field_width, precision, flags);
+                break;
+            case 'm': // mac address
+                flags |= SMALL | ZEROPAD;
+                ptr = va_arg(args, char *);
+                for (size_t t = 0; t < 6; t++, ptr++) {
+                    int num = *ptr;
+                    str = number(str, &num, 16, 2, precision, flags);
+                    *str = ':';
+                    str++;
+                }
+                str--;
+                break;
+            case 'r': // ip address
+                flags |= SMALL;
+                ptr = va_arg(args, u8 *);
+                for (size_t t = 0; t < 4; t++, ptr++) {
+                    int num = *ptr;
+                    str = number(str, &num, 10, field_width, precision, flags);
+                    *str = '.';
+                    str++;
+                }
+                str--;
                 break;
 
             case 'n':

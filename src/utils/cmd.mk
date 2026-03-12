@@ -22,18 +22,18 @@ QEMU+= -chardev stdio,mux=on,id=com1 # char dev 1
 #QEMU+= -chardev udp,mux=on,id=com2,port=7777,ipv4=on # char dev 2
 QEMU+= -serial chardev:com1 # COM 1
 #QEMU+= -serial chardev:com2 # COM 2
-
+QEMU+= -netdev tap,id=eth0,ifname=tap0,script=no,downscript=no # 网络设备
 
 QEMU_DISK:=-boot c
 
 QEMU_DEBUG:= -s -S
 
 .PHONY: qemu
-qemu: $(IMAGES)
+qemu: $(IMAGES)	$(BR0) $(TAPS)
 	$(QEMU) $(QEMU_DISK)
 
 .PHONY: qemug
-qemug: $(IMAGES)
+qemug: $(IMAGES) $(BR0) $(TAPS)
 	$(QEMU) $(QEMU_DISK) $(QEMU_DEBUG)
 
 # vmware vmdk image

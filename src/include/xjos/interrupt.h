@@ -44,6 +44,7 @@ enum {
     IRQ_PARALLEL_1  = 7,    // Parallel port 1 (LPT1)
     IRQ_RTC         = 8,    // Real-Time Clock
     IRQ_REDIRECT    = 9,    // Redirected IRQ2, often available for peripherals
+    IRQ_NIC         = 11,   // Network Interface Card
     IRQ_MOUSE       = 12,   // PS/2 Mouse controller
     IRQ_MATH        = 13,   // Math co-processor (FPU)
     IRQ_HARDDISK    = 14,   // Primary ATA hard disk controller

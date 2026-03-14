@@ -23,10 +23,17 @@ QEMU+= -chardev stdio,mux=on,id=com1 # char dev 1
 QEMU+= -serial chardev:com1 # COM 1
 #QEMU+= -serial chardev:com2 # COM 2
 QEMU+= -netdev tap,id=eth0,ifname=tap0,script=no,downscript=no # 网络设备
+QEMU+= -device e1000,netdev=eth0,mac=5A:5A:5A:5A:5A:33 # 网卡 e1000
 
 QEMU_DISK:=-boot c
 
 QEMU_DEBUG:= -s -S
+
+.PHONY: database
+database:
+	@echo "Updating compile_commands.json via compiledb..."
+	@python3 -m compiledb -n $(MAKE) all || (echo "Error: compiledb not found. Try 'pip install compiledb'"; exit 1)
+	@echo "Update complete."
 
 .PHONY: qemu
 qemu: $(IMAGES)	$(BR0) $(TAPS)

@@ -8,3 +8,5 @@ test/
 *.py
 note/
 *.sh
+*.json
+*.cache

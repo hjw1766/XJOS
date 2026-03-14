@@ -18,6 +18,7 @@ extern void ramdisk_init();
 extern void ide_init();
 extern void floppy_init();
 extern void sb16_init();
+extern void e1000_init();
 
 extern void buffer_init();
 extern void file_init();
@@ -40,6 +41,7 @@ void init_thread() {
     ide_init();      // 初始化 IDE 硬盘设备
     sb16_init();     // 初始化 Sound Blaster 16 声卡
     floppy_init();   // 初始化软盘驱动 (如果存在)
+    e1000_init();    // 初始化 Intel E1000 网卡
 
     // 3. 文件系统核心初始化 (必须在块设备就绪后进行)
     buffer_init();   // 初始化高速缓冲 (依赖底层的块设备读写)

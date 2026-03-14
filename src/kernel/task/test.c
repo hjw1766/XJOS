@@ -6,13 +6,10 @@
 
 #define LOGK(fmt, args...) DEBUGK(fmt, ##args)
 
+extern void test_e1000_send_packet();
+
 err_t sys_test() {
-    // 输出二进制
-    LOGK("%08b\n", 0x5a);
-    // 输出 mac 地址
-    LOGK("%m\n", "\x11\x22\x03\x04\x5f\x5a");
-    // 输出 ip 地址
-    LOGK("%r\n", "\xff\x4e\x03\x04");
+    test_e1000_send_packet();
 
     return EOK;
 }

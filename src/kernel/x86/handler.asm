@@ -112,7 +112,7 @@ INTERRUPT_HANDLER 0x27, 0; IRQ  7 - LPT1 (Parallel Port 1)
 INTERRUPT_HANDLER 0x28, 0; IRQ  8 - Real-time Clock (RTC)
 INTERRUPT_HANDLER 0x29, 0; IRQ  9 - (Available, often for network cards)
 INTERRUPT_HANDLER 0x2a, 0; IRQ 10 - (Available, often for network/USB)
-INTERRUPT_HANDLER 0x2b, 0; IRQ 11 - (Available, often for graphics/SATA)
+INTERRUPT_HANDLER 0x2b, 0; IRQ 11 - NIC (Network Interface Card)
 INTERRUPT_HANDLER 0x2c, 0; IRQ 12 - PS/2 Mouse
 INTERRUPT_HANDLER 0x2d, 0; IRQ 13 - x87 FPU Co-processor
 INTERRUPT_HANDLER 0x2e, 0; IRQ 14 - Primary ATA Hard Disk

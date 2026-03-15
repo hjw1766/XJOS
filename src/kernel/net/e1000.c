@@ -1,4 +1,5 @@
-#include "net/eth.h"
+#include "net/pbuf.h"
+#include "xjos/stddef.h"
 #include <xjos/types.h>
 #include <hardware/pci.h>
 #include <hardware/io.h>
@@ -241,11 +242,20 @@ static void recv_packet(e1000_t *e1000) {
 
         assert(rx->length < 1600);
 
-        // 处理接收到的数据包
-        eth_t *eth = (eth_t *)(u32)(rx->addr &0xffffffff); // 最高位是一些状态位，屏蔽掉
-        // LOGK("ETH R [0x%04X]: %m -> %m, %d\n", 
-        //     eth->type, eth->src, eth->dst, rx->length);
+        pbuf_t *pbuf = element_entry(pbuf_t, payload, rx->addr);
+        pbuf->length = rx->length;
 
+        LOGK("ETH R 0x%p [0x%04X]: %m -> %m, %d\n",
+             pbuf,
+             ntohs(pbuf->eth->type),
+             pbuf->eth->src,
+             pbuf->eth->dst,
+             rx->length);
+        
+        pbuf_put(pbuf);
+
+        pbuf = pbuf_get();
+        rx->addr = (u32)pbuf->payload; // 重新分配一个新的缓冲区给这个描述符
         rx->status = 0; // 清除状态，表示这个描述符又可用了
         moutl(e1000->membase + E1000_RDT, e1000->rx_cur);
 
@@ -253,7 +263,7 @@ static void recv_packet(e1000_t *e1000) {
     }
 };
 
-void send_packet(eth_t *eth, u16 len) {
+void send_packet(pbuf_t *pbuf) {
     e1000_t *e1000 = &obj;
     tx_desc_t *tx = &e1000->tx_descs[e1000->tx_cur];
 
@@ -263,33 +273,24 @@ void send_packet(eth_t *eth, u16 len) {
         assert(task_block(e1000->tx_waiter, NULL, TASK_BLOCKED, TIMELESS) == EOK);
     }
 
-    // 准备发送数据包
-    memcpy((void *)(u32)tx->addr, eth, len);
+    assert(pbuf->count == 1); // 只能有一个任务在等待发送完成;
 
-    tx->length = len;
+    pbuf_put(element_entry(pbuf_t, payload, tx->addr));
+
+    tx->addr = (u32)pbuf->payload;
+    tx->length = pbuf->length;
     tx->cmd = TCMD_EOP | TCMD_RS | TCMD_RPS | TCMD_IFCS;
     tx->status = 0;
 
     e1000->tx_cur = (e1000->tx_cur + 1) % TX_DESC_NR; // 移动到下一个描述符
     moutl(e1000->membase + E1000_TDT, e1000->tx_cur);
 
-    LOGK("ETH S [0x%04X]: %m -> %m, %d\n", 
-        ntohs(eth->type), eth->src, eth->dst, len);
-
-}
-
-void test_e1000_send_packet() {
-    e1000_t *e1000 = &obj;
-
-    eth_t *eth = (eth_t *)alloc_kpage(1);
-    memcpy(eth->src, e1000->mac, 6);
-    memcpy(eth->dst, "\xff\xff\xff\xff\xff\xff", 6);
-    eth->type = 0x0090;
-
-    int len = 1500;
-    memset(eth->payload, 'A', len);
-    send_packet(eth, len + sizeof(eth_t));
-    free_kpage((u32)eth, 1);
+    LOGK("ETH S 0x%p [0x%04X]: %m -> %m, %d\n",
+         pbuf,
+         ntohs(pbuf->eth->type),
+         pbuf->eth->src,
+         pbuf->eth->dst,
+         pbuf->length);
 }
 
 
@@ -410,6 +411,7 @@ static void e1000_reset(e1000_t *e1000) {
     e1000->rx_descs = (rx_desc_t *)alloc_kpage(1);
     e1000->rx_cur = 0;
     moutl(e1000->membase + E1000_RDBAL, (u32)e1000->rx_descs);
+    moutl(e1000->membase + E1000_RDBAH, 0);
     moutl(e1000->membase + E1000_RDLEN, sizeof(rx_desc_t) * RX_DESC_NR);
 
     // 接受描述符头尾指针
@@ -418,14 +420,16 @@ static void e1000_reset(e1000_t *e1000) {
 
     // 接受描述符基地址
     for (size_t i = 0; i < RX_DESC_NR; i++) {
-        e1000->rx_descs[i].addr = (u32)alloc_kpage(1);
+        e1000->rx_descs[i].addr = (u32)pbuf_get()->payload;
         e1000->rx_descs[i].status = 0;
     }
 
     // 接收控制寄存器
     u32 value = 0;
-    value |= RCTL_EN | RCTL_SBP | RCTL_UPE;
-    value |= RCTL_MPE | RCTL_LBM_NONE | RTCL_RDMTS_HALF;
+    // 去掉 RCTL_UPE (单播混杂) 和 RCTL_MPE (多播混杂)
+    // 这样网卡就只会接收：1.发给自己的 MAC 包 2.广播包 (RCTL_BAM)
+    value |= RCTL_EN | RCTL_SBP; 
+    value |= RCTL_LBM_NONE | RTCL_RDMTS_HALF;
     value |= RCTL_BAM | RCTL_SECRC | RCTL_BSIZE_2048;
     moutl(e1000->membase + E1000_RCTL, value);
 
@@ -433,6 +437,7 @@ static void e1000_reset(e1000_t *e1000) {
     e1000->tx_descs = (tx_desc_t *)alloc_kpage(1); // TODO:free
     e1000->tx_cur = 0;
     moutl(e1000->membase + E1000_TDBAL, (u32)e1000->tx_descs);
+    moutl(e1000->membase + E1000_TDBAH, 0);
     moutl(e1000->membase + E1000_TDLEN, sizeof(tx_desc_t) * TX_DESC_NR);
 
     // 传输描述符头尾指针
@@ -440,9 +445,8 @@ static void e1000_reset(e1000_t *e1000) {
     moutl(e1000->membase + E1000_TDT, 0);
 
     // 传输描述符基地址
-    for (size_t i = 0; i < TX_DESC_NR; i++)
-    {
-        e1000->tx_descs[i].addr = alloc_kpage(1); // TODO: free
+    for (size_t i = 0; i < TX_DESC_NR; i++) {
+        e1000->tx_descs[i].addr = (u32)pbuf_get()->payload;
         e1000->tx_descs[i].status = TS_DD;
     }
 
@@ -455,8 +459,13 @@ static void e1000_reset(e1000_t *e1000) {
 
     // 初始化中断
     value = 0;
-    value = IM_RXT0 | IM_RXO | IM_RXDMT0 | IM_RXSEQ | IM_LSC;
-    value |= IM_TXQE | IM_TXDW | IM_TXDLOW;
+    // 剔除 IM_TXQE (队列为空时触发，导致闲时刷屏)
+    // 剔除 IM_RXDMT0 (空闲描述符低于阈值，初始化时会误触发)
+    // 剔除 IM_TXDLOW (发送描述符不足)
+    value = IM_RXT0   // 核心：有包收到了
+          | IM_TXDW   // 核心：包发完了（用于唤醒进程）
+          | IM_LSC    // 核心：网线状态变了
+          | IM_RXO;   // 辅助：接收溢出告警
     moutl(e1000->membase + E1000_IMS, value);
 }
 

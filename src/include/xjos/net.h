@@ -4,6 +4,7 @@
 
 #include <net/types.h>
 #include <net/eth.h>
+#include <net/pbuf.h>
 
 
 #endif /* XJOS_NET_H */

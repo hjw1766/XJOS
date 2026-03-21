@@ -276,6 +276,11 @@ void send_packet(pbuf_t *pbuf) {
     assert(pbuf->count == 1); // 只能有一个任务在等待发送完成;
 
     pbuf_put(element_entry(pbuf_t, payload, tx->addr));
+    
+    // checksum
+    u32 sum = eth_fcs((char *)pbuf->payload, pbuf->length);
+    *(u32 *)((u32)pbuf->payload + pbuf->length) = sum;
+    pbuf->length += ETH_FCS_LEN;
 
     tx->addr = (u32)pbuf->payload;
     tx->length = pbuf->length;

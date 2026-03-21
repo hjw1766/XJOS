@@ -17,12 +17,12 @@ player
 ENTRYPOINT := 0x10000
 
 # Compilers and linkers
-CC := gcc
+CC := gcc-13
 LD := ld
 ASM := nasm
 
-# Get libgcc path dynamically (for 64-bit ops on 32-bit)
-LIBGCC := $(shell $(CC) -m32 -print-libgcc-file-name)
+# Get libgcc path dynamically (for 64-bit ops on 32-bit) 特定环境arch迁移的解决方案
+LIBGCC := /usr/lib/gcc/x86_64-pc-linux-gnu/13.3.1/32/libgcc.a
 
 # ====================================================================
 #                   Compilation and Linker Options
@@ -35,6 +35,7 @@ CFLAGS += -fno-pic                 # Do not generate position-independent code
 CFLAGS += -fno-pie                 # Do not generate position-independent executable
 CFLAGS += -nostdlib                # Do not link standard library
 CFLAGS += -fno-stack-protector     # Disable stack protection
+CFLAGS += -mno-sse -mno-sse2 -mno-mmx
 CFLAGS += -g                       # Add debug info
 CFLAGS += -I$(SRC_DIR)/include     # Add include path
 CFLAGS += -DXJOS

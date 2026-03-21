@@ -6,7 +6,7 @@
 #include <xjos/types.h>
 
 
-#define ETH_CRC_LEN 4
+#define ETH_FCS_LEN 4
 
 typedef struct eth_t {
     eth_addr_t dst; // 源 MAC 地址

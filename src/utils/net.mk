@@ -11,7 +11,7 @@ TAPS:=	/sys/class/net/tap0 \
 BNAME:=br0
 IP0:=192.168.239.111
 MAC0:=5a:5a:5a:5a:5a:22
-GATEWAY:=192.168.239.1
+GATEWAY:=192.168.239.2
 
 $(BR0):
 	sudo ip link add $(BNAME) type bridge

@@ -6,6 +6,8 @@
 #include <net/eth.h>
 #include <net/pbuf.h>
 #include <net/chksum.h>
+#include <net/netif.h>
+#include <net/addr.h>
 
 
 #endif /* XJOS_NET_H */

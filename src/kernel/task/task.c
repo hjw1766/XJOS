@@ -400,6 +400,16 @@ static task_t *task_create(target_t target, const char *name, int nice, u32 uid)
     return task;
 }
 
+task_t *task_create_packet(target_t target, const char *name, int nice) {
+    u32 uid = running_task()->uid;
+
+    // 约束 nice 值范围
+    if (nice < -20) nice = -20;
+    if (nice > 19) nice = 19;
+
+    return task_create(target, name, nice, uid);
+}
+
 extern void sys_close();
 
 void task_exit(int status) {

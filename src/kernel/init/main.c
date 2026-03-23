@@ -11,6 +11,7 @@ extern void tss_init();
 extern void fpu_init();
 extern void pci_init();
 extern void pbuf_init();
+extern void netif_init();
 
 #include <xjos/interrupt.h>
 
@@ -42,6 +43,7 @@ void kernel_init() {
     task_init();
 
     pbuf_init();        // 初始化网络缓冲区管理器
+    netif_init();       // 初始化虚拟网卡和网络接口
 
     // 6. 开启中断，将控制权正式移交给调度器
     // 此时时钟中断开始触发，调度器会选中 init_thread 开始执行设备和文件系统的初始化

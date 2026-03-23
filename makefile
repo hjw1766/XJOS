@@ -139,7 +139,7 @@ $(BUILD_DIR)/libs/common/%.o: CFLAGS += -D__USER__
 $(BUILD_DIR)/kernel/common/%.o: CFLAGS += -D__KERNEL__
 $(BUILD_DIR)/kernel/common/%.o: $(SRC_DIR)/libs/common/%.c
 	@mkdir -p $(dir $@)
-	@echo "CC\t\t$<"
+	@echo "CC		$<"
 	@$(CC) $(CFLAGS) -c $< -o $@
 
 # 4. 链接用户态运行时库 (libc.o)
@@ -173,7 +173,7 @@ $(BUILD_DIR)/user/busybox/busybox.o: CFLAGS += -I$(SRC_DIR)/user/builtin
 $(BUILD_DIR)/user/busybox/applets/%.o: CFLAGS += -DXJOS_BUSYBOX_APPLET
 $(BUILD_DIR)/user/busybox/applets/%.o: $(SRC_DIR)/user/builtin/%.c
 	@mkdir -p $(dir $@)
-	@echo "CC\t\t$<"
+	@echo "CC		$<"
 	@$(CC) $(CFLAGS) -c $< -o $@
 
 BUILTIN_APPS := \

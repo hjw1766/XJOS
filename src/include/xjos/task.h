@@ -174,6 +174,8 @@ task_t *get_task(pid_t pid);
 void task_init();
 task_t *running_task();
 
+task_t *task_create_packet(target_t target, const char *name, int nice);
+
 void schedule();
 void task_yield();
 void task_sleep(u32 ms);

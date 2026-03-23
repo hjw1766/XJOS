@@ -1,5 +1,3 @@
-#include "net/pbuf.h"
-#include "xjos/stddef.h"
 #include <xjos/types.h>
 #include <hardware/pci.h>
 #include <hardware/io.h>
@@ -222,6 +220,8 @@ typedef struct e1000_t {
     u16 tx_cur; // 当前传输描述符索引
 
     task_t *tx_waiter; // 等待发送完成的任务
+
+    netif_t *netif; // 虚拟网卡
 } e1000_t;
 
 
@@ -245,14 +245,8 @@ static void recv_packet(e1000_t *e1000) {
         pbuf_t *pbuf = element_entry(pbuf_t, payload, rx->addr);
         pbuf->length = rx->length;
 
-        LOGK("ETH R 0x%p [0x%04X]: %m -> %m, %d\n",
-             pbuf,
-             ntohs(pbuf->eth->type),
-             pbuf->eth->src,
-             pbuf->eth->dst,
-             rx->length);
-        
-        pbuf_put(pbuf);
+        // 数据包加入缓冲区
+        netif_input(e1000->netif, pbuf);
 
         pbuf = pbuf_get();
         rx->addr = (u32)pbuf->payload; // 重新分配一个新的缓冲区给这个描述符
@@ -263,8 +257,8 @@ static void recv_packet(e1000_t *e1000) {
     }
 };
 
-void send_packet(pbuf_t *pbuf) {
-    e1000_t *e1000 = &obj;
+static void send_packet(netif_t *netif, pbuf_t *pbuf) {
+    e1000_t *e1000 = netif->nic;
     tx_desc_t *tx = &e1000->tx_descs[e1000->tx_cur];
 
     while (tx->status == 0) {
@@ -278,9 +272,9 @@ void send_packet(pbuf_t *pbuf) {
     pbuf_put(element_entry(pbuf_t, payload, tx->addr));
     
     // checksum
-    u32 sum = eth_fcs((char *)pbuf->payload, pbuf->length);
+    /* u32 sum = eth_fcs((char *)pbuf->payload, pbuf->length);
     *(u32 *)((u32)pbuf->payload + pbuf->length) = sum;
-    pbuf->length += ETH_FCS_LEN;
+    pbuf->length += ETH_FCS_LEN; */
 
     tx->addr = (u32)pbuf->payload;
     tx->length = pbuf->length;
@@ -518,6 +512,8 @@ void e1000_init() {
     map_area(membar.iobase, membar.size);
 
     e1000_reset(e1000);
+
+    e1000->netif = netif_setup(e1000, e1000->mac, send_packet);
 
     u32 intr = pci_interrupt(device);
 

@@ -218,8 +218,12 @@ typedef struct e1000_t {
 
     tx_desc_t *tx_descs; // 传输描述符数组
     u16 tx_cur; // 当前传输描述符索引
-
+    u16 tx_dirty; // 最后一个未完成的传输描述符索引
+    
     task_t *tx_waiter; // 等待发送完成的任务
+
+    pbuf_t *tx_pbufs[TX_DESC_NR]; // 传输描述符对应的pbuf
+    pbuf_t *rx_pbufs[RX_DESC_NR]; // 接收描述符对应的pbuf
 
     netif_t *netif; // 虚拟网卡
 } e1000_t;
@@ -242,14 +246,15 @@ static void recv_packet(e1000_t *e1000) {
 
         assert(rx->length < 1600);
 
-        pbuf_t *pbuf = element_entry(pbuf_t, payload, rx->addr);
+        pbuf_t *pbuf = e1000->rx_pbufs[e1000->rx_cur];
         pbuf->length = rx->length;
 
         // 数据包加入缓冲区
         netif_input(e1000->netif, pbuf);
 
         pbuf = pbuf_get();
-        rx->addr = (u32)pbuf->payload; // 重新分配一个新的缓冲区给这个描述符
+        e1000->rx_pbufs[e1000->rx_cur] = pbuf; // 更新镜像
+        rx->addr = get_paddr((u32)pbuf->payload); // 重新分配一个新的缓冲区给这个描述符
         rx->status = 0; // 清除状态，表示这个描述符又可用了
         moutl(e1000->membase + E1000_RDT, e1000->rx_cur);
 
@@ -261,22 +266,18 @@ static void send_packet(netif_t *netif, pbuf_t *pbuf) {
     e1000_t *e1000 = netif->nic;
     tx_desc_t *tx = &e1000->tx_descs[e1000->tx_cur];
 
-    while (tx->status == 0) {
+    while (!(tx->status & TS_DD)) {
         assert(e1000->tx_waiter == NULL); // 只能有一个任务在等待发送完成
         e1000->tx_waiter = running_task();
         assert(task_block(e1000->tx_waiter, NULL, TASK_BLOCKED, TIMELESS) == EOK);
     }
 
     assert(pbuf->count == 1); // 只能有一个任务在等待发送完成;
+    /* checksum */
 
-    pbuf_put(element_entry(pbuf_t, payload, tx->addr));
-    
-    // checksum
-    /* u32 sum = eth_fcs((char *)pbuf->payload, pbuf->length);
-    *(u32 *)((u32)pbuf->payload + pbuf->length) = sum;
-    pbuf->length += ETH_FCS_LEN; */
+    e1000->tx_pbufs[e1000->tx_cur] = pbuf; // 记录这个描述符对应的pbuf，等发送完成后释放
 
-    tx->addr = (u32)pbuf->payload;
+    tx->addr = get_paddr((u32)pbuf->payload);
     tx->length = pbuf->length;
     tx->cmd = TCMD_EOP | TCMD_RS | TCMD_RPS | TCMD_IFCS;
     tx->status = 0;
@@ -292,6 +293,22 @@ static void send_packet(netif_t *netif, pbuf_t *pbuf) {
          pbuf->length);
 }
 
+static void tx_cleanup(e1000_t *e1000) {   
+    while (e1000->tx_dirty != e1000->tx_cur) {
+        tx_desc_t *tx = &e1000->tx_descs[e1000->tx_dirty];
+        if (!(tx->status & TS_DD)) {
+            break;  // 这个描述符还没有被网卡写回，说明后面的描述符也没有被写回
+        }
+
+        pbuf_t *pbuf = e1000->tx_pbufs[e1000->tx_dirty];
+        if (pbuf) {
+            pbuf_put(pbuf);
+            e1000->tx_pbufs[e1000->tx_dirty] = NULL;
+        }
+
+        e1000->tx_dirty = (e1000->tx_dirty + 1) % TX_DESC_NR; // 移动到下一个描述符
+    }
+}
 
 static void e1000_handler(int vector) {
     assert(vector == IRQ_NIC + 0x20);
@@ -301,8 +318,11 @@ static void e1000_handler(int vector) {
     u32 status = minl(e1000->membase + E1000_ICR);
 
     // 传输描述符写回，表示有一个数据包发出
-    if ((status & IM_TXDW)) {
+    if ((status & (IM_TXDW | IM_TXQE))) {
         LOGK("e1000 TXDW...\n");
+
+        tx_cleanup(e1000);
+
         if (e1000->tx_waiter) {
             task_unblock(e1000->tx_waiter, EOK);
             e1000->tx_waiter = NULL;
@@ -419,7 +439,9 @@ static void e1000_reset(e1000_t *e1000) {
 
     // 接受描述符基地址
     for (size_t i = 0; i < RX_DESC_NR; i++) {
-        e1000->rx_descs[i].addr = (u32)pbuf_get()->payload;
+        pbuf_t *pbuf = pbuf_get();
+        e1000->rx_pbufs[i] = pbuf; // 记录这个描述符对应的pbuf，等接收完成后释放
+        e1000->rx_descs[i].addr = get_paddr((u32)pbuf->payload);    // 记录物理地址
         e1000->rx_descs[i].status = 0;
     }
 
@@ -435,7 +457,9 @@ static void e1000_reset(e1000_t *e1000) {
     // 传输初始化
     e1000->tx_descs = (tx_desc_t *)alloc_kpage(1); // TODO:free
     e1000->tx_cur = 0;
-    moutl(e1000->membase + E1000_TDBAL, (u32)e1000->tx_descs);
+
+    // 前 4M 恒等映射
+    moutl(e1000->membase + E1000_TDBAL, get_paddr((u32)e1000->tx_descs));
     moutl(e1000->membase + E1000_TDBAH, 0);
     moutl(e1000->membase + E1000_TDLEN, sizeof(tx_desc_t) * TX_DESC_NR);
 
@@ -445,7 +469,7 @@ static void e1000_reset(e1000_t *e1000) {
 
     // 传输描述符基地址
     for (size_t i = 0; i < TX_DESC_NR; i++) {
-        e1000->tx_descs[i].addr = (u32)pbuf_get()->payload;
+        e1000->tx_descs[i].addr = 0;
         e1000->tx_descs[i].status = TS_DD;
     }
 

@@ -10,6 +10,7 @@
 
 static list_t free_buf_list;
 static size_t pbuf_count = 0;
+static size_t free_count = 0;
 
 // get free pbuf
 pbuf_t *pbuf_get() {
@@ -25,6 +26,7 @@ pbuf_t *pbuf_get() {
 
         pbuf_count += 2;
         LOGK("pbuf count %d\n", pbuf_count);
+        free_count += 2;
     }
 
     pbuf = element_entry(pbuf_t, node, list_popback(&free_buf_list));
@@ -32,6 +34,7 @@ pbuf_t *pbuf_get() {
     assert(((u32)pbuf & 0x7ff) == 0);
 
     pbuf->count = 1;
+    free_count--;
     return pbuf;
 }
 
@@ -47,6 +50,8 @@ void pbuf_put(pbuf_t *pbuf) {
     }
 
     list_push(&free_buf_list, &pbuf->node);
+    free_count++;
+    LOGK("pbuf count (%d/%d)\n", free_count, pbuf_count);
 }
 
 void pbuf_init() {

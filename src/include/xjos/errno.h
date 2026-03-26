@@ -55,6 +55,7 @@ enum {
     EEOF,              // 读写文件结束
 
     EADDR,             // 地址错误
+    EPROTO,            // 协议错误
 };
 
 

@@ -82,11 +82,8 @@ static void neti_thread() {
 
                 assert(!pbuf->node.next && !pbuf->node.prev);
 
-                LOGK("ETH RECV [%04X]: %m -> %m %d\n",
-                     ntohs(pbuf->eth->type),
-                     pbuf->eth->src,
-                     pbuf->eth->dst,
-                     pbuf->length);
+                eth_input(netif, pbuf);
+                
                 pbuf_put(pbuf);
                 count++;
             }

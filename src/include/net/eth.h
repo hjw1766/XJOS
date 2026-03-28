@@ -3,8 +3,7 @@
 
 
 #include <net/types.h>
-#include <xjos/types.h>
-
+#include <net/arp.h>
 
 #define ETH_FCS_LEN 4
 
@@ -18,7 +17,12 @@ typedef struct eth_t {
     eth_addr_t dst; // 源 MAC 地址
     eth_addr_t src; // 目的 MAC 地址
     u16 type;       // 以太网帧类型，表示上层协议类型，如 IPv4、ARP 等
-    u8 payload[0]; // 以太网帧的有效载荷，长度为 (总长度 - 14 - CRC 长度)
+
+    union {
+        u8 payload[0]; // 以太网帧负载，实际长度由上层协议决定
+        arp_t arp[0];     // ARP 协议数据
+    };
+
 } _packed eth_t;
 
 err_t eth_input(netif_t *netif, pbuf_t *pbuf);

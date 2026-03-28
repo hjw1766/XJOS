@@ -51,7 +51,6 @@ void pbuf_put(pbuf_t *pbuf) {
 
     list_push(&free_buf_list, &pbuf->node);
     free_count++;
-    LOGK("pbuf count (%d/%d)\n", free_count, pbuf_count);
 }
 
 void pbuf_init() {

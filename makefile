@@ -17,12 +17,16 @@ player
 ENTRYPOINT := 0x10000
 
 # Compilers and linkers
-CC := gcc-13
+# Allow environment override (e.g. CC=gcc-15 make), default to system gcc.
+CC ?= gcc
 LD := ld
 ASM := nasm
 
-# Get libgcc path dynamically (for 64-bit ops on 32-bit) 特定环境arch迁移的解决方案
-LIBGCC := /usr/lib/gcc/x86_64-pc-linux-gnu/13.3.1/32/libgcc.a
+# Resolve libgcc path via selected compiler (works across distro/version layouts).
+LIBGCC := $(shell $(CC) -m32 -print-libgcc-file-name 2>/dev/null)
+ifeq ($(strip $(LIBGCC)),)
+LIBGCC := $(shell $(CC) -print-libgcc-file-name)
+endif
 
 # ====================================================================
 #                   Compilation and Linker Options
@@ -36,6 +40,7 @@ CFLAGS += -fno-pie                 # Do not generate position-independent execut
 CFLAGS += -nostdlib                # Do not link standard library
 CFLAGS += -fno-stack-protector     # Disable stack protection
 CFLAGS += -mno-sse -mno-sse2 -mno-mmx
+CFLAGS += -std=gnu17               # Keep legacy C semantics compatible with GCC15
 CFLAGS += -g                       # Add debug info
 CFLAGS += -I$(SRC_DIR)/include     # Add include path
 CFLAGS += -DXJOS

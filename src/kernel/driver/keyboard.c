@@ -272,7 +272,7 @@ static void set_leds() {
     keyboard_ack();
 }
 
-extern int tty_rx_notify();
+extern int tty_rx_notify(char *ch, bool ctrl, bool shift, bool alt);
 
 void keyboard_handler(int vector) {
     assert(vector == 0x21);

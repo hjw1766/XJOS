@@ -8,6 +8,7 @@
 #include <net/chksum.h>
 #include <net/netif.h>
 #include <net/addr.h>
+#include <net/arp.h>
 
 
 #endif /* XJOS_NET_H */

@@ -43,3 +43,10 @@ err_t inet_aton(const char *cp, ip_addr_t addr) {
 bool ip_addr_cmp(ip_addr_t addr1, ip_addr_t addr2) {
     return *(u32 *)addr1 == *(u32 *)addr2;
 }
+
+bool ip_addr_maskcmp(ip_addr_t addr1, ip_addr_t addr2, ip_addr_t mask) {
+    u32 a1 = *(u32 *)addr1;
+    u32 a2 = *(u32 *)addr2;
+    u32 m = *(u32 *)mask;
+    return (a1 & m) == (a2 & m);
+}

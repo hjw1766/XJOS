@@ -7,6 +7,9 @@
 
 #define ETH_FCS_LEN 4
 
+#define ETH_BROADCAST "\xff\xff\xff\xff\xff\xff"
+#define ETH_ANY "\x00\x00\x00\x00\x00\x00"
+
 enum {
     ETH_TYPE_IPV4 = 0x0800, // IPv4 协议
     ETH_TYPE_ARP = 0x0806,  // ARP 协议

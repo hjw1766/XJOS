@@ -32,6 +32,8 @@ err_t eth_output(netif_t *netif, pbuf_t *pbuf, eth_addr_t dst, u16 type, u32 len
     eth_addr_copy(pbuf->eth->dst, dst);
     eth_addr_copy(pbuf->eth->src, netif->hwaddr);
 
+    pbuf->length = sizeof(eth_t) + len;
+
     netif_output(netif, pbuf);
 
     return EOK;

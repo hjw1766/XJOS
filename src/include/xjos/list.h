@@ -61,6 +61,28 @@ typedef struct {
          &pos->member != &(list)->head;                                         \
          pos = list_entry(pos->member.next, typeof(*(pos)), member))
 
+/**
+ * @brief Iterate over a list safe against removal of list entry.
+ * @param pos    The type * to use as a loop cursor.
+ * @param n      Another type * to use as temporary storage.
+ * @param list   The head for your list.
+ * @param member The name of the list_node_t within the struct.
+ */
+#define list_for_each_entry_safe(pos, n, list, member)                      \
+    for (pos = list_entry((list)->head.next, typeof(*(pos)), member),       \
+         n = list_entry(pos->member.next, typeof(*(pos)), member);          \
+         &pos->member != &(list)->head;                                     \
+         pos = n, n = list_entry(n->member.next, typeof(*(n)), member))
+
+/**
+ * @brief Iterate over a list backwards safe against removal of list entry.
+ */
+#define list_for_each_entry_safe_reverse(pos, n, list, member)              \
+    for (pos = list_entry((list)->head.prev, typeof(*(pos)), member),       \
+         n = list_entry(pos->member.prev, typeof(*(pos)), member);          \
+         &pos->member != &(list)->head;                                     \
+         pos = n, n = list_entry(n->member.prev, typeof(*(n)), member))
+
 
 // func declaration
 static inline void list_init(list_t *list);

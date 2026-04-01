@@ -49,6 +49,8 @@ enum REGISTERS {
 
     E1000_MAT0 = 0x5200, // Multicast Table Array 05200h-053FCh 组播表数组
     E1000_MAT1 = 0x5400, // Multicast Table Array 05200h-053FCh 组播表数组
+    E1000_RAL = 0x5400,  // Receive Address Low
+    E1000_RAH = 0x5404,  // Receive Address High
 };
 
 // 设备状态
@@ -231,6 +233,25 @@ typedef struct e1000_t {
 
 static e1000_t obj;
 
+static bool mac_is_invalid(const u8 *mac) {
+    bool all_zero = true;
+    bool all_ff = true;
+    bool all_5a = true;
+
+    for (int i = 0; i < 6; i++) {
+        all_zero &= (mac[i] == 0x00);
+        all_ff &= (mac[i] == 0xFF);
+        all_5a &= (mac[i] == 0x5A);
+    }
+
+    if (all_zero || all_ff || all_5a) {
+        return true;
+    }
+
+    // Multicast bit must be 0 for a unicast NIC MAC.
+    return (mac[0] & 0x01) != 0;
+}
+
 
 static void recv_packet(e1000_t *e1000) {
     while (true) {
@@ -362,13 +383,13 @@ static void e1000_handler(int vector) {
 
 // 检测只读存储器
 static void e1000_eeprom_detect(e1000_t *e1000) {
+    e1000->eeprom = false;
     moutl(e1000->membase + E1000_EERD, 0x1);
     for (size_t i = 0; i < 1000; i++) {
         u32 val = minl(e1000->membase + E1000_EERD);
         if (val & 0x10) {
             e1000->eeprom = true;
-        } else {
-            e1000->eeprom = false;
+            break;
         }
     }
 }
@@ -391,6 +412,8 @@ static u16 e1000_eeprom_read(e1000_t *e1000, u8 addr) {
 
 static void e1000_read_mac(e1000_t *e1000) {
     e1000_eeprom_detect(e1000);
+    memset(e1000->mac, 0, sizeof(e1000->mac));
+
     if (e1000->eeprom) {
         u16 val;
         val = e1000_eeprom_read(e1000, 0);
@@ -404,11 +427,22 @@ static void e1000_read_mac(e1000_t *e1000) {
         val = e1000_eeprom_read(e1000, 2);
         e1000->mac[4] = val & 0xFF;
         e1000->mac[5] = (val >> 8);
-    } else {
-        char *mac = (char *)(e1000->membase + 0x5400);
-        for (int i = 5; i >= 0; i--) {
-            e1000->mac[i] = mac[i];
-        }
+    }
+
+    if (mac_is_invalid(e1000->mac)) {
+        u32 ral = minl(e1000->membase + E1000_RAL);
+        u32 rah = minl(e1000->membase + E1000_RAH);
+
+        e1000->mac[0] = ral & 0xFF;
+        e1000->mac[1] = (ral >> 8) & 0xFF;
+        e1000->mac[2] = (ral >> 16) & 0xFF;
+        e1000->mac[3] = (ral >> 24) & 0xFF;
+        e1000->mac[4] = rah & 0xFF;
+        e1000->mac[5] = (rah >> 8) & 0xFF;
+    }
+
+    if (mac_is_invalid(e1000->mac)) {
+        LOGK("E1000 MAC invalid after probe: %m\n", e1000->mac);
     }
 
     LOGK("E1000 MAC: %m\n", e1000->mac);
@@ -458,8 +492,7 @@ static void e1000_reset(e1000_t *e1000) {
     e1000->tx_descs = (tx_desc_t *)alloc_kpage(1); // TODO:free
     e1000->tx_cur = 0;
 
-    // 前 4M 恒等映射
-    moutl(e1000->membase + E1000_TDBAL, get_paddr((u32)e1000->tx_descs));
+    moutl(e1000->membase + E1000_TDBAL, (u32)e1000->tx_descs);
     moutl(e1000->membase + E1000_TDBAH, 0);
     moutl(e1000->membase + E1000_TDLEN, sizeof(tx_desc_t) * TX_DESC_NR);
 

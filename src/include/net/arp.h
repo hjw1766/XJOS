@@ -16,6 +16,11 @@ enum {
 #define ARP_PROTOCOL_IP 0x0800 // ARP 协议 IP
 #define ARP_PROTOCOL_IP_LEN 4  // ARP IP 地址长度 4
 
+#define ARP_ENTRY_TIMEOUT 600   // ARP 表项超时时间，单位为秒
+#define ARP_RETRY 5             // ARP 重试次数
+#define ARP_DELAY 2             // ARP 延迟时间，单位为秒
+#define ARP_REFRESH_DELAY 1000  // ARP 刷新延迟，单位为毫秒
+
 typedef struct arp_t {
     u16 hwtype;       // 硬件类型
     u16 proto;        // 协议类型
@@ -29,5 +34,6 @@ typedef struct arp_t {
 } _packed arp_t;
 
 err_t arp_input(netif_t *netif, pbuf_t *pbuf);
+err_t arp_eth_output(netif_t *netif, pbuf_t *pbuf, ip_addr_t addr, u16 type, u32 len);
 
 #endif /* !XJOS_NET_ARP_H */

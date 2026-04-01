@@ -36,11 +36,11 @@ database:
 	@echo "Update complete."
 
 .PHONY: qemu
-qemu: $(IMAGES)	$(BR0) $(TAPS)
+qemu: $(IMAGES) netup
 	$(QEMU) $(QEMU_DISK)
 
 .PHONY: qemug
-qemug: $(IMAGES) $(BR0) $(TAPS)
+qemug: $(IMAGES) netup
 	$(QEMU) $(QEMU_DISK) $(QEMU_DEBUG)
 
 # vmware vmdk image

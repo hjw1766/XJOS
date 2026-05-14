@@ -26,6 +26,9 @@ netif_t *netif_setup(void *nic, eth_addr_t hwaddr, void *output);
 
 netif_t *netif_get();
 
+// ip 路由选择
+netif_t *netif_route(ip_addr_t addr);
+
 void netif_remove(netif_t *netif);
 
 void netif_input(netif_t *netif, pbuf_t *pbuf);

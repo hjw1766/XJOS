@@ -9,6 +9,7 @@
 #include <net/netif.h>
 #include <net/addr.h>
 #include <net/arp.h>
+#include <net/ip.h>
 
 
 #endif /* XJOS_NET_H */

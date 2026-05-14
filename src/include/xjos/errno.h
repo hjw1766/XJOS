@@ -56,6 +56,8 @@ enum {
 
     EADDR,             // 地址错误
     EPROTO,            // 协议错误
+    EOPTION,           // 选项错误
+    EFRAG,             // 分片错误
 };
 
 

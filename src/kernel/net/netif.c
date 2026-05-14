@@ -48,6 +48,17 @@ netif_t *netif_get() {
     return netif;
 }
 
+netif_t *netif_route(ip_addr_t addr) {
+    list_t *list = &netif_list;
+    netif_t *netif;
+    list_for_each_entry(netif, list, node) {
+        if (ip_addr_maskcmp(addr, netif->ipaddr, netif->netmask)) {
+            return netif;
+        }
+    }
+    return netif_get();     // new ip address, route to default netif
+}
+
 void netif_remove(netif_t *netif) {
     list_remove(&netif->node);
     kfree(netif);

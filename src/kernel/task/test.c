@@ -10,16 +10,17 @@
 
 
 err_t sys_test() {
-    pbuf_t *pbuf = pbuf_get();
-    netif_t *netif = netif_get();    
-
-    int len = 1500;
-    memset(pbuf->eth->payload, 'A', len);
-
     ip_addr_t addr;
-    // Keep test destination aligned with host bridge IP in src/utils/net.mk.
-    assert(inet_aton("192.168.239.1", addr) == EOK);
-    arp_eth_output(netif, pbuf, addr, 0x9000, len);
+    assert(inet_aton("192.168.239.2", addr) == EOK);
+
+    pbuf_t *pbuf = pbuf_get();
+    netif_t *netif = netif_route(addr);
+
+    ip_t *ip = pbuf->eth->ip;
+    u16 len = 128 - sizeof(ip_t) - sizeof(eth_t);
+    memset(ip->payload, 'T', len);
+
+    ip_output(netif, pbuf, addr, 254, len);
 
     return EOK;
 }

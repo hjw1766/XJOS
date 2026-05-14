@@ -4,6 +4,7 @@
 
 #include <net/types.h>
 #include <net/arp.h>
+#include <net/ip.h>
 
 #define ETH_FCS_LEN 4
 
@@ -24,6 +25,7 @@ typedef struct eth_t {
     union {
         u8 payload[0]; // 以太网帧负载，实际长度由上层协议决定
         arp_t arp[0];     // ARP 协议数据
+        ip_t ip[0];       // IP 协议数据
     };
 
 } _packed eth_t;

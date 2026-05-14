@@ -13,7 +13,8 @@ err_t eth_input(netif_t *netif, pbuf_t *pbuf) {
 
     switch (type) {
         case ETH_TYPE_IPV4:
-            break;
+            // ip input
+            return ip_input(netif, pbuf);
         case ETH_TYPE_IPV6:
             break;
         case ETH_TYPE_ARP:

@@ -293,7 +293,7 @@ static void send_packet(netif_t *netif, pbuf_t *pbuf) {
         assert(task_block(e1000->tx_waiter, NULL, TASK_BLOCKED, TIMELESS) == EOK);
     }
 
-    assert(pbuf->count == 1); // 只能有一个任务在等待发送完成;
+    assert(pbuf->count > 0);
     /* checksum */
 
     e1000->tx_pbufs[e1000->tx_cur] = pbuf; // 记录这个描述符对应的pbuf，等发送完成后释放

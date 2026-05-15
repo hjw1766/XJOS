@@ -10,6 +10,7 @@
 #include <net/addr.h>
 #include <net/arp.h>
 #include <net/ip.h>
+#include <net/icmp.h>
 
 
 #endif /* XJOS_NET_H */

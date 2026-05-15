@@ -27,16 +27,23 @@ err_t ip_input(netif_t *netif, pbuf_t *pbuf) {
         return -EOPTION;
     }
 
+    // 不支持分片
+    if (ip->flags & IP_FLAG_NOLAST) {
+        LOGK("ip fragment not supported\n");
+        return -EFRAG;
+    }
+
     if (!ip_addr_cmp(ip->dst, netif->ipaddr))
         return -EADDR;
+
+    arp_update(netif, ip->src, pbuf->eth->src);
 
     ip->length = ntohs(ip->length);
     ip->id = ntohs(ip->id);
 
     switch (ip->proto) {
         case IP_PROTOCOL_ICMP:
-            LOGK("IP:ICMP received\n");
-            break;
+            return icmp_input(netif, pbuf); // ICMP 输入函数会处理 ICMP 协议的输入
         case IP_PROTOCOL_UDP:
             LOGK("IP:UDP received\n");
             break;

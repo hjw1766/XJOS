@@ -34,6 +34,7 @@ typedef struct arp_t {
 } _packed arp_t;
 
 err_t arp_input(netif_t *netif, pbuf_t *pbuf);
+err_t arp_update(netif_t *netif, ip_addr_t ipaddr, eth_addr_t hwaddr);
 err_t arp_eth_output(netif_t *netif, pbuf_t *pbuf, ip_addr_t addr, u16 type, u32 len);
 
 #endif /* !XJOS_NET_ARP_H */

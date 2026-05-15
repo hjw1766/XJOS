@@ -15,6 +15,7 @@ extern void netif_init();
 extern void eth_init();
 extern void arp_init();
 extern void ip_init();
+extern void icmp_init();
 
 #include <xjos/interrupt.h>
 
@@ -50,6 +51,7 @@ void kernel_init() {
     eth_init();         // 初始化以太网驱动
     arp_init();         // 初始化 ARP 缓存和相关功能
     ip_init();          // 初始化 IP 协议栈
+    icmp_init();        // 初始化 ICMP 协议栈
 
     // 6. 开启中断，将控制权正式移交给调度器
     // 此时时钟中断开始触发，调度器会选中 init_thread 开始执行设备和文件系统的初始化

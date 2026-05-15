@@ -116,17 +116,15 @@ static err_t arp_query(arp_entry_t *entry) {
     return EOK;
 }
 
-static err_t arp_refresh(netif_t *netif, pbuf_t *pbuf) {
-    arp_t *arp = pbuf->eth->arp;
-
-    if (!ip_addr_maskcmp(arp->ipsrc, netif->ipaddr, netif->netmask)) {
+err_t arp_update(netif_t *netif, ip_addr_t ipaddr, eth_addr_t hwaddr) {
+    if (!ip_addr_maskcmp(ipaddr, netif->ipaddr, netif->netmask)) {
         return -EADDR; // 源 IP 地址不匹配，丢弃 ARP 报文
     }
 
-    arp_entry_t *entry = arp_lookup(netif, arp->ipsrc);
+    arp_entry_t *entry = arp_lookup(netif, ipaddr);
 
     // 拿到 ARP 条目，更新 MAC 地址和失效时间
-    eth_addr_copy(entry->hwaddr, arp->hwsrc);
+    eth_addr_copy(entry->hwaddr, hwaddr);
     entry->expires = sys_time() + ARP_ENTRY_TIMEOUT;
     entry->retry = 0;
     entry->used = 0;
@@ -143,8 +141,14 @@ static err_t arp_refresh(netif_t *netif, pbuf_t *pbuf) {
         netif_output(netif, pbuf);
     }
     
-    LOGK("ARP reply %r -> %m \n", arp->ipsrc, arp->hwsrc);
+    LOGK("ARP update %r -> %m \n", ipaddr, hwaddr);
     return EOK;
+}
+
+static err_t arp_refresh(netif_t *netif, pbuf_t *pbuf) {
+    arp_t *arp = pbuf->eth->arp;
+
+    return arp_update(netif, arp->ipsrc, arp->hwsrc);
 }
 
 static err_t arp_reply(netif_t *netif, pbuf_t *pbuf) {

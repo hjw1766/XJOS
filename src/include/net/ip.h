@@ -3,6 +3,7 @@
 
 
 #include <net/types.h>
+#include <net/icmp.h>
 
 #define IP_VERSION_4 4
 #define IP_TTL 64
@@ -35,7 +36,12 @@ typedef struct ip_t {
     u16 chksum;    // 校验和
     ip_addr_t src; // 源 IP 地址
     ip_addr_t dst; // 目的 IP 地址
-    u8 payload[0]; // 载荷
+
+    union {
+        u8 payload[0];  // 载荷
+        icmp_t icmp[0];     // ICMP 载荷
+        icmp_echo_t echo[0];    // ICMP 回显载荷
+    };
 } _packed ip_t;
 
 err_t ip_input(netif_t *netif, pbuf_t *pbuf);

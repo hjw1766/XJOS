@@ -26,7 +26,7 @@ netif_t *netif_setup(void *nic, eth_addr_t hwaddr, void *output) {
 
     eth_addr_copy(netif->hwaddr, hwaddr);
 
-    assert(inet_aton("192.168.239.44", netif->ipaddr) == EOK);
+    assert(inet_aton("192.168.239.33", netif->ipaddr) == EOK);
     assert(inet_aton("255.255.255.0", netif->netmask) == EOK);
     assert(inet_aton("192.168.239.2", netif->gateway) == EOK);
 

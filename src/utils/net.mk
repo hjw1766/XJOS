@@ -12,24 +12,27 @@ BNAME:=br0
 IP0:=192.168.239.111
 MAC0:=5a:5a:5a:5a:5a:22
 GATEWAY:=192.168.239.2
-# Keep host L3 on br0 optional; default disabled to avoid route/ARP conflicts
+# Keep host L3 off by default to avoid stealing the host default route.
+# Use `make BR0_L3=1 qemu` only when you explicitly need the host bridge IP.
 BR0_L3 ?= 0
 
-.PHONY: netup
+.PHONY: netup netclean netreset
 
-# Always enforce bridge membership before qemu start.
-# /sys/class/net based targets are kept for compatibility.
+# Idempotent network setup for repeated make qemu runs.
+# Existing tap devices are reused because qemu may still have one open.
 netup:
 	@if ! ip link show $(BNAME) >/dev/null 2>&1; then \
 		sudo ip link add $(BNAME) type bridge; \
 	fi
 	sudo ip link set $(BNAME) type bridge ageing_time 0
 
-	sudo ip link set $(IFACE) down || true
-	sudo ip addr flush dev $(IFACE) || true
-	sudo ip link set $(IFACE) nomaster || true
-	sudo ip link set $(IFACE) master $(BNAME)
-	sudo ip link set $(IFACE) up
+	@if ip link show $(IFACE) >/dev/null 2>&1; then \
+		sudo ip link set $(IFACE) down || true; \
+		sudo ip addr flush dev $(IFACE) || true; \
+		sudo ip link set $(IFACE) nomaster || true; \
+		sudo ip link set $(IFACE) master $(BNAME); \
+		sudo ip link set $(IFACE) up; \
+	fi
 
 	sudo ip link set dev $(BNAME) address $(MAC0)
 	sudo ip link set $(BNAME) up
@@ -42,17 +45,30 @@ netup:
 
 	@if [ "$(BR0_L3)" = "1" ]; then \
 		sudo ip addr replace $(IP0)/24 brd + dev $(BNAME); \
-		sudo ip route replace default via $(GATEWAY) dev $(BNAME) proto static metric 10000; \
+		sudo ip route replace $(GATEWAY)/32 dev $(BNAME) proto static metric 10000; \
 	else \
 		sudo ip addr flush dev $(BNAME) scope global || true; \
 	fi
 
 	@for tap in tap0 tap1 tap2; do \
-		sudo ip tuntap add mode tap $$tap 2>/dev/null || true; \
+		if ! ip link show $$tap >/dev/null 2>&1; then \
+			sudo ip tuntap add mode tap $$tap; \
+		fi; \
 		sudo ip link set $$tap nomaster 2>/dev/null || true; \
 		sudo ip link set $$tap master $(BNAME); \
 		sudo ip link set dev $$tap up; \
 	done
+
+netclean:
+	@for tap in tap0 tap1 tap2; do \
+		sudo ip link set $$tap down 2>/dev/null || true; \
+		sudo ip tuntap del mode tap $$tap 2>/dev/null || true; \
+	done
+	sudo ip link set $(IFACE) nomaster 2>/dev/null || true
+	sudo ip link set $(BNAME) down 2>/dev/null || true
+	sudo ip link del $(BNAME) type bridge 2>/dev/null || true
+
+netreset: netclean netup
 
 $(BR0): netup
 	@:

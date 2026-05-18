@@ -364,7 +364,7 @@ static err_t fd_transfer(floppy_t *fd, bool mode, void *buf, u8 count, idx_t lba
         // Successful transfer
         if (mode == FD_READ)
             memcpy(buf, fd->buf, count * SECTOR_SIZE);
-        return count;
+        return EOK;
     } else {
         LOGK("fd: xfer error, st0 %02X st1 %02X st2 %02X THS=%d/%d/%d\n",
              fd->result.st0, fd->result.st1, fd->result.st2,
@@ -385,15 +385,7 @@ static err_t fd_read(floppy_t *fd, void *buf, u8 count, idx_t lba) {
 
     fd_motor_on(fd);
 
-    u8 left = count;
-    int ret;
-    while (left) {
-        if ((ret = fd_transfer(fd, FD_READ, buf, left, lba)) < EOK)
-            break;
-        left -= ret;
-        buf += ret * SECTOR_SIZE;
-        lba += ret;
-    }
+    int ret = fd_transfer(fd, FD_READ, buf, count, lba);
 
     fd_motor_off(fd);
     mutex_unlock(&fd->lock);
@@ -412,15 +404,7 @@ static err_t fd_write(floppy_t *fd, void *buf, u8 count, idx_t lba) {
 
     fd_motor_on(fd);
 
-    u8 left = count;
-    int ret;
-    while (left) {
-        if ((ret = fd_transfer(fd, FD_WRITE, buf, left, lba)) < EOK)
-            break;
-        left -= ret;
-        buf += ret * SECTOR_SIZE;
-        lba += ret;
-    }
+    int ret = fd_transfer(fd, FD_WRITE, buf, count, lba);
 
     fd_motor_off(fd);
     mutex_unlock(&fd->lock);

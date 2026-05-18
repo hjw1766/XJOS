@@ -1,5 +1,7 @@
 BUSYBOX_APPLETS ?= ls cat echo env sh
 
+.NOTPARALLEL: image $(BUILD_DIR)/master.img $(BUILD_DIR)/slave.img
+
 # MUSIC:= $(SRC_DIR)/utils/KN.mp3
 
 # $(BUILD_DIR)/mono.wav: $(MUSIC)
@@ -130,8 +132,8 @@ umount0: /dev/loop0
 
 .PHONY: mount1
 mount1: $(BUILD_DIR)/slave.img
-	sudo losetup /dev/loop0 --partscan $<
-	sudo mount /dev/loop0p1 /mnt
+	sudo losetup /dev/loop1 --partscan $<
+	sudo mount /dev/loop1p1 /mnt
 	sudo chown ${USER} /mnt
 	
 .PHONY: umount1

@@ -5,11 +5,13 @@ extern void memory_map_init();
 extern void mapping_init();
 extern void arena_init();
 extern void file_init();
+extern void device_init();
 extern void task_init();
 extern void syscall_init();
 extern void tss_init();
 extern void fpu_init();
 extern void pci_init();
+extern void console_init();
 extern void pbuf_init();
 extern void netif_init();
 extern void eth_init();
@@ -36,6 +38,8 @@ void kernel_init() {
     
     fpu_init();          // 初始化 FPU 相关设置
     pci_init();          // 初始化 PCI 总线
+    device_init();       // 初始化设备表
+    console_init();      // 初始化 VGA 控制台并注册 console 设备
 
     // 3. 系统调用接口
     syscall_init();      // 注册所有的 sys_* 系统调用

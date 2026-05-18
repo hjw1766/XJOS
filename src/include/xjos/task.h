@@ -193,8 +193,6 @@ pid_t sys_getppid();
 void task_prepare_user_mode();
 void task_to_user_mode(target_t target);
 
-fd_t task_get_fd(task_t *task);
-void task_put_fd(task_t *task, fd_t fd);
 
 bool task_leader(task_t *task);
 

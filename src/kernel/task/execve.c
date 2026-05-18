@@ -214,7 +214,7 @@ static void load_segment(inode_t *inode, Elf32_Phdr *phdr) {
         link_page(addr);
     }
 
-    inode_read(inode, (char *)vaddr, phdr->p_filesz, phdr->p_offset);
+    inode->op->read(inode, (char *)vaddr, phdr->p_filesz, phdr->p_offset);
     // 如果有.bss段，清零
     if (phdr->p_filesz < phdr->p_memsz) {
         memset((char *)vaddr + phdr->p_filesz, 0, phdr->p_memsz - phdr->p_filesz);
@@ -247,7 +247,7 @@ static u32 load_elf(inode_t *inode) {
 
     int n = 0;
     // read ELF header
-    n = inode_read(inode, (char *)USER_EXEC_ADDR, sizeof(Elf32_Ehdr), 0);
+    n = inode->op->read(inode, (char *)USER_EXEC_ADDR, sizeof(Elf32_Ehdr), 0);
     assert(n == sizeof(Elf32_Ehdr));
 
     Elf32_Ehdr *ehdr = (Elf32_Ehdr *)USER_EXEC_ADDR;
@@ -256,7 +256,7 @@ static u32 load_elf(inode_t *inode) {
 
     // read program headers
     Elf32_Phdr *phdr = (Elf32_Phdr *)(USER_EXEC_ADDR + sizeof(Elf32_Ehdr));
-    n = inode_read(inode, (char *)phdr, ehdr->e_phnum * ehdr->e_phentsize, ehdr->e_phoff);
+    n = inode->op->read(inode, (char *)phdr, ehdr->e_phnum * ehdr->e_phentsize, ehdr->e_phoff);
 
     Elf32_Phdr *ptr = phdr;
     for (size_t i = 0; i < ehdr->e_phnum; i++) {
@@ -353,16 +353,21 @@ static u32 copy_argv_envp(char *filename, char *argv[], char *envp[]) {
 extern int sys_brk();
 
 int sys_execve(char *filename, char *argv[], char *envp[]) {
+    LOGK("execve enter %s\n", filename);
     inode_t *inode = namei(filename);
     int ret = EOF;
     if (!inode)
-        goto rollback;
+        return -ENOENT;
 
-    if (!ISFILE(inode->desc->mode))
+    if (!ISFILE(inode->mode)) {
+        ret = -EPERM;
         goto rollback;
+    }
     
-    if (!permission(inode, P_EXEC))
+    if (!inode->op->permission(inode, P_EXEC)) {
+        ret = -EPERM;
         goto rollback;
+    }
     
     task_t *task = running_task();
     strlcpy(task->name, filename, TASK_NAME_LEN);
@@ -374,8 +379,11 @@ int sys_execve(char *filename, char *argv[], char *envp[]) {
 
     // load
     u32 entry = load_elf(inode);
-    if (entry == EOF)
+    if (entry == EOF) {
+        ret = -ENOEXEC;
         goto rollback;
+    }
+    LOGK("execve loaded %s entry=%p stack_top=%p\n", filename, entry, top);
 
     sys_brk((u32)task->end); // set brk to new end  
 
@@ -398,6 +406,7 @@ int sys_execve(char *filename, char *argv[], char *envp[]) {
     iframe->esp = top; // 用户栈顶
 
     iframe->eflags = (0x200 | 0x2); // IF=1 (开中断), IOPL=0
+    LOGK("execve jump user %s eip=%p esp=%p\n", filename, iframe->eip, iframe->esp);
 
     // switch to user mode
     asm volatile (

@@ -588,29 +588,6 @@ void task_to_user_mode(target_t target) {
 pid_t sys_getpid() { return running_task()->pid; }
 pid_t sys_getppid() { return running_task()->ppid; }
 
-fd_t task_get_fd(task_t *task) {
-    fd_t i;
-    
-    for (i = 0; i < TASK_FILE_NR; i++) {
-        if (!task->files[i])
-            break;
-    }
-
-    if (i == TASK_FILE_NR) {
-        panic("Too many open files");
-    }
-
-    return i;
-}
-
-void task_put_fd(task_t *task, fd_t fd) {
-    // if (fd < 3)  // 内核不应该替进程做决定
-    //     return;
-    
-    assert(fd < TASK_FILE_NR);
-    task->files[fd] = NULL;
-}
-
 
 extern void idle_thread();
 extern void init_thread();

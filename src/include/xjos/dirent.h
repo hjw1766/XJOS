@@ -3,13 +3,15 @@
 
 #include <xjos/types.h>
 
-#ifndef NAME_LEN
-#define NAME_LEN 14
+#ifndef MAXNAMELEN
+#define MAXNAMELEN 64
 #endif
 
 typedef struct dentry_t {
-    u16 nr;
-    char name[NAME_LEN];
+    u32 nr;
+    u32 length;
+    u32 namelen;
+    char name[MAXNAMELEN];
 } dentry_t;
 
 #endif /* XJOS_DIRENT_H */

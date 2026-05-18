@@ -48,7 +48,7 @@ extern int sys_chdir();
 extern int sys_chroot();
 extern char *sys_getcwd();
 
-extern int sys_create();
+extern int sys_creat();
 extern fd_t sys_open();
 extern void sys_close();
 
@@ -120,7 +120,7 @@ void syscall_init() {
 
     syscall_table[SYS_NR_OPEN] = sys_open;
     syscall_table[SYS_NR_CLOSE] = sys_close;
-    syscall_table[SYS_NR_CREAT] = sys_create;
+    syscall_table[SYS_NR_CREAT] = sys_creat;
 
     syscall_table[SYS_NR_DUP] = sys_dup;
     syscall_table[SYS_NR_DUP2] = sys_dup2;

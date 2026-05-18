@@ -6,6 +6,8 @@
 #include <xjos/list.h>
 #include <xjos/mutex.h>
 
+#define BLOCK_SIZE 1024                       // 块大小
+#define SECTOR_SIZE 512
 #define BLOCK_SECS (BLOCK_SIZE / SECTOR_SIZE) // 1 block = 2 sectors
 
 typedef struct buffer_t {

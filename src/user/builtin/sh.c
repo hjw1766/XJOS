@@ -50,9 +50,14 @@ static volatile bool interrupt = false;
 // ---------- helper function ----------
 
 static const char *basename(const char *path) {
-    const char *ptr = strrchr(path, '/');
-    if (!ptr) return path;
-    return ptr + 1;
+    size_t len = strlen(path);
+    while (len > 1 && path[len - 1] == '/') {
+        len--;
+    }
+    while (len > 0 && path[len - 1] != '/') {
+        len--;
+    }
+    return path + len;
 }
 
 static void print_prompt() {
@@ -79,12 +84,12 @@ static pid_t lookup_and_spawn(char **cmd_argv, fd_t infd, fd_t outfd, fd_t errfd
     stat_t statbuf;
 
     if (strchr(cmd_name, '/')) {
-        if (stat(cmd_name, &statbuf) != EOF) {
+        if (stat(cmd_name, &statbuf) >= 0) {
             return spawn_process(cmd_name, cmd_argv, infd, outfd, errfd, pgid);
         }
     } else {
         sprintf(buf, "/bin/%s", cmd_name);
-        if (stat(buf, &statbuf) != EOF) {
+        if (stat(buf, &statbuf) >= 0) {
             return spawn_process(buf, cmd_argv, infd, outfd, errfd, pgid);
         }
     }
@@ -150,7 +155,7 @@ static int dupfile(int argc, char *argv[], fd_t dupfd[3]) {
 
     if (infile != NULL) {
         fd_t fd = open(infile, O_RDONLY, 0);
-        if (fd == EOF) {
+        if (fd < 0) {
             printf("sh: open failed: %s\n", infile);
             goto rollback;
         }
@@ -160,7 +165,7 @@ static int dupfile(int argc, char *argv[], fd_t dupfd[3]) {
     if (outfile != NULL) {
         int flags = O_WRONLY | O_CREAT | (outappend ? O_APPEND : O_TRUNC);
         fd_t fd = open(outfile, flags, 0755);
-        if (fd == EOF) {
+        if (fd < 0) {
             printf("sh: open failed: %s\n", outfile);
             goto rollback;
         }
@@ -170,7 +175,7 @@ static int dupfile(int argc, char *argv[], fd_t dupfd[3]) {
     if (errfile != NULL) {
         int flags = O_WRONLY | O_CREAT | (errappend ? O_APPEND : O_TRUNC);
         fd_t fd = open(errfile, flags, 0755);
-        if (fd == EOF) {
+        if (fd < 0) {
             printf("sh: open failed: %s\n", errfile);
             goto rollback;
         }
@@ -198,11 +203,11 @@ static int apply_redirect_fds(fd_t dupfd[3], fd_t saved[3]) {
         if (dupfd[i] == EOF) continue;
 
         saved[i] = dup(i);
-        if (saved[i] == EOF) {
+        if (saved[i] < 0) {
             printf("sh: dup failed\n");
             return -1;
         }
-        if (dup2(dupfd[i], i) == EOF) {
+        if (dup2(dupfd[i], i) < 0) {
             printf("sh: dup2 failed\n");
             return -1;
         }
@@ -319,7 +324,7 @@ static void builtin_help(int argc, char *argv[]) {
 static void builtin_cd(int argc, char *argv[]) {
     if (argc < 2) return;   // todo cd ~
 
-    if (chdir(argv[1]) == EOF) {
+    if (chdir(argv[1]) < 0) {
         printf("cd: %s: No such file or directory\n", argv[1]);
     }
 }
@@ -393,7 +398,7 @@ static void execute(int argc, char *argv[]) {
             argv[i] = NULL;
 
             fd_t pipefd[2];
-            if (pipe(pipefd) == EOF) {
+            if (pipe(pipefd) < 0) {
                 printf("sh: pipe failed\n");
                 return;
             }

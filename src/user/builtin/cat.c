@@ -22,14 +22,14 @@ int cmd_cat(int argc, char **argv, char **envp) {
     }
 
     int fd = open((char *)argv[1], O_RDONLY, 0);
-    if (fd == EOF) {
+    if (fd < 0) {
         printf("file %s not exists.\n", argv[1]);
-        return EOF;
+        return fd;
     }
 
     while (1) {
         int len = read(fd, buf, BUFLEN);
-        if (len == EOF) {
+        if (len <= 0) {
             break;
         }
         write(1, buf, len);

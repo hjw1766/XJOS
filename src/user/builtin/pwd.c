@@ -11,7 +11,7 @@ int cmd_pwd(int argc, char **argv, char **envp) {
 
     char cwd[MAX_PATH_LEN];
     if (getcwd(cwd, MAX_PATH_LEN) == (char *)0) {
-        return EOF;
+        return -1;
     }
     printf("%s\n", cwd);
     return 0;

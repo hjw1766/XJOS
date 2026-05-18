@@ -12,16 +12,16 @@ int cmd_rm(int argc, char **argv, char **envp) {
         return EOF;
     }
 
-    if (unlink(argv[1]) == EOF) {
+    if (unlink(argv[1]) < 0) {
         printf("rm: cannot remove '%s': ", argv[1]);
         fd_t fd = open(argv[1], O_RDONLY, 0);
-        if (fd == EOF) {
+        if (fd < 0) {
             printf("No such file or directory\n");
         } else {
             close(fd);
             printf("Is a directory or permission denied\n");
         }
-        return EOF;
+        return -1;
     }
 
     return 0;

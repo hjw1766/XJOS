@@ -97,8 +97,8 @@ void reckon_size(int *size, char *qualifer) {
 int cmd_ls(int argc, char **argv, char **envp) {
     (void)envp;
     fd_t fd = open(".", O_RDONLY, 0);
-    if (fd == EOF)
-        return EOF;
+    if (fd < 0)
+        return fd;
 
     bool list = false;
     if (argc == 2 && !strcmp(argv[1], "-l"))
@@ -109,7 +109,7 @@ int cmd_ls(int argc, char **argv, char **envp) {
     while (true)
     {
         int len = readdir(fd, &entry, 1);
-        if (len == EOF)
+        if (len <= 0)
             break;
         if (!entry.nr)
             continue;
@@ -124,8 +124,8 @@ int cmd_ls(int argc, char **argv, char **envp) {
         }
 
         stat_t statbuf;
-
-        stat(entry.name, &statbuf);
+        if (stat(entry.name, &statbuf) < 0)
+            continue;
 
         parsemode(statbuf.mode, buf);
         printf("%s ", buf);

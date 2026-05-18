@@ -3,6 +3,7 @@
 #include <xjos/interrupt.h>
 #include <xjos/string.h>
 #include <drivers/device.h>
+#include <xjos/debug.h>
 
 
 

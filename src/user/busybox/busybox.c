@@ -55,7 +55,7 @@ static void usage(void) {
 int main(int argc, char **argv, char **envp) {
     if (argc <= 0 || argv == NULL || argv[0] == NULL) {
         usage();
-        return EOF;
+        return -1;
     }
 
     const char *self = bb_basename(argv[0]);
@@ -65,7 +65,7 @@ int main(int argc, char **argv, char **envp) {
     if (bb_streq(self, "busybox") || bb_streq(self, "busybox.out")) {
         if (argc < 2) {
             usage();
-            return EOF;
+            return -1;
         }
         applet = argv[1];
         argv += 1;
@@ -88,5 +88,5 @@ int main(int argc, char **argv, char **envp) {
 
     printf("busybox: unknown applet: %s\n", applet);
     usage();
-    return EOF;
+    return -1;
 }

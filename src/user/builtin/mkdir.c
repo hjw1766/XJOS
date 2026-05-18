@@ -12,7 +12,7 @@ int cmd_mkdir(int argc, char **argv, char **envp) {
         return EOF;
     }
 
-    if (mkdir(argv[1], 0755) == EOF) {
+    if (mkdir(argv[1], 0755) < 0) {
         printf("mkdir: cannot create directory '%s': ", argv[1]);
 
         stat_t statbuf;
@@ -22,7 +22,7 @@ int cmd_mkdir(int argc, char **argv, char **envp) {
         }
 
         printf("Permission denied or parent directory does not exist\n");
-        return EOF;
+        return -1;
     }
 
     return 0;

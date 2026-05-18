@@ -2,6 +2,7 @@
 #include <fs/stat.h>
 #include <xjos/stdio.h>
 #include <xjos/assert.h>
+#include <xjos/debug.h>
 #include <fs/fs.h>
 
 extern file_t file_table[];
@@ -17,13 +18,13 @@ void dev_init() {
 
     device = device_find(DEV_RAMDISK, 0);
     assert(device);
-    devmkfs(device->dev, 0);
+    fs_get_op(FS_TYPE_MINIX)->mkfs(device->dev, 0);
 
     // 将 mba设备挂载到/dev目录下，后续/dev目录下的所有设备节点均在该设备上创建
-    super_block_t *sb = read_super(device->dev);
-    sb->iroot = iget(device->dev, 1);
-    sb->imount = namei("/dev");
-    sb->imount->mount = device->dev;
+    super_t *super = read_super(device->dev);
+    assert(super->iroot);
+    super->imount = namei("/dev");
+    super->imount->mount = device->dev;
 
     device = device_find(DEV_CONSOLE, 0);
     sys_mknod("/dev/console", IFCHR | 0600, device->dev);
@@ -95,21 +96,18 @@ void dev_init() {
     file = &file_table[STDIN_FILENO];
     inode = namei("/dev/stdin");
     file->inode = inode;
-    file->mode = inode->desc->mode;
     file->flags = O_RDONLY;
     file->offset = 0;
 
     file = &file_table[STDOUT_FILENO];
     inode = namei("/dev/stdout");
     file->inode = inode;
-    file->mode = inode->desc->mode;
     file->flags = O_WRONLY;
     file->offset = 0;
 
     file = &file_table[STDERR_FILENO];
     inode = namei("/dev/stderr");
     file->inode = inode;
-    file->mode = inode->desc->mode;
     file->flags = O_WRONLY;
     file->offset = 0;
 }

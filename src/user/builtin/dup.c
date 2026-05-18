@@ -12,7 +12,7 @@ int cmd_dup(int argc, char **argv, char **envp) {
 
     while (true) {
         int n = read(STDIN_FILENO, &ch, 1);
-        if (n == EOF) {
+        if (n <= 0) {
             break;
         }
 

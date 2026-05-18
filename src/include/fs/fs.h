@@ -5,27 +5,8 @@
 #include <xjos/list.h>
 #include <fs/stat.h>
 
+#define MAXNAMELEN 64
 #define MAX_PATH_LEN 1024
-#define BLOCK_SIZE 1024 // block size in bytes
-#define SECTOR_SIZE 512
-
-#define MINIX1_MAGIC 0x137F
-#define NAME_LEN 14 // max length of file name
-
-#define IMAP_NR 8   // inode map blocks number max
-#define ZMAP_NR 8   // zone map blocks number max
-
-#define BLOCK_BITS (BLOCK_SIZE * 8) // block map bits number
-#define BLOCK_INODES (BLOCK_SIZE / sizeof(inode_desc_t)) // block inode number
-#define BLOCK_DENTRIES (BLOCK_SIZE / sizeof(dentry_t)) // block dir entries number
-#define BLOCK_INDEXES (BLOCK_SIZE / sizeof(u16)) // block index number
-
-#define DIRECT_BLOCK (7)                    // direct block numbers in inode
-#define INDIRECT1_BLOCK (BLOCK_INDEXES)      // indirect1 block numbers in inode
-#define INDIRECT2_BLOCK (BLOCK_INDEXES * BLOCK_INDEXES) // indirect2 block numbers in inode
-#define TOTAL_BLOCK (DIRECT_BLOCK + INDIRECT1_BLOCK + INDIRECT2_BLOCK) // total block numbers in inode
-
-#define ACC_MODE(x) ("\004\002\006\377"[(x) & O_ACCMODE])
 
 enum file_flag {
     O_RDONLY = 00,              // read only
@@ -50,47 +31,68 @@ typedef struct inode_desc_t {
     u16 zones[9];   // * block numbers (0-6 direct, 7 indirect, 8 double indirect)
 } inode_desc_t;
 
+enum {
+    FS_TYPE_NONE = 0,
+    FS_TYPE_PIPE,
+    FS_TYPE_SOCKET,
+    FS_TYPE_MINIX,
+    FS_TYPE_NUM,
+};
+
 typedef struct inode_t {
-    inode_desc_t *desc;     // pointer to inode descriptor
-    struct buffer_t *buf;   // pointer to buffer containing inode 
-    dev_t dev;           // device number
-    idx_t nr;           // inode number
-    u32 count;          // reference count
-    time_t atime;        // access time
-    time_t ctime;        // change time
-    list_node_t node;    // list node
-    dev_t mount;        // install device
+    list_node_t node;  // list node
+
+    void *desc;
+
+    union {
+        struct buffer_t *buf;   // inode 描述符对应buf
+        void *addr;             // pipe 缓冲地址
+    };
+
+    dev_t dev;  // 设备号
+    dev_t rdev; // 虚拟设备号
+
+    idx_t nr;     // i 节点号
+    size_t count; // 引用计数
+
+    time_t atime; // 访问时间
+    time_t mtime; // 修改时间
+    time_t ctime; // 创建时间
+
+    dev_t mount; // 安装设备
+
+    mode_t mode; // 文件模式
+    size_t size; // 文件大小
+    int type;    // 文件系统类型
+
+    int uid; // 用户 id
+    int gid; // 组 id
+
+    struct super_t *super;   // 超级块
+    struct fs_op_t *op;      // 文件系统操作
+
     struct task_t *rxwaiter;    // read wait process
     struct task_t *txwaiter;    // write wait process
-    bool pipe;          // is pipe inode
 } inode_t;
 
-typedef struct super_desc_t {
-    u16 inodes;         // total number of inodes
-    u16 zones;          // logical blocks
-    u16 imap_blocks;    // (i node)number of inode map blocks
-    u16 zmap_blocks;    // (z blk)number of zone map blocks
-    u16 firstdatazone;  // number of first data zone
-    u16 long_zone_size; // log2 of blocks per zone
-    u32 max_size;       // maximum file size
-    u16 magic;          // magic number
-} super_desc_t;
+typedef struct super_t {
+    void *desc;           // 超级块描述符
+    struct buffer_t *buf; // 超级块描述符 buffer
+    dev_t dev;            // 设备号
+    u32 count;            // 引用计数
+    int type;             // 文件系统类型
+    size_t sector_size;   // 扇区大小
+    size_t block_size;    // 块大小
+    list_t inode_list;    // 使用中 inode 链表
+    inode_t *iroot;       // 根目录 inode
+    inode_t *imount;      // 安装到的 inode} super_block_t;
+} super_t;
 
-typedef struct super_block_t {
-    super_desc_t *desc;         // pointer to super block descriptor
-    struct buffer_t *buf;       // pointer to buffer containing super block
-    struct buffer_t *imaps[IMAP_NR]; // inode map buffers
-    struct buffer_t *zmaps[ZMAP_NR]; // zone map buffers
-    dev_t dev;             // device number
-    u32 count;             // reference count
-    list_t inode_list;     // list of inodes (useing)
-    inode_t *iroot;         // root inode
-    inode_t *imount;        // mount inode
-} super_block_t;
- 
 typedef struct dentry_t {
-    u16 nr;         // inode number
-    char name[NAME_LEN]; // file name
+    idx_t nr;         // inode number
+    u32 length;       // 目录长度
+    u32 namelen;      // 文件名长度
+    char name[MAXNAMELEN]; // file name
 } dentry_t;
 
 typedef struct dcache_entry_t {
@@ -102,7 +104,7 @@ typedef struct dcache_entry_t {
     dev_t dev;    // parent device number
     idx_t p_nr;  // parent inode number
 
-    char name[NAME_LEN + 1];
+    char name[MAXNAMELEN + 1];
     u32 hash;        // name hash value
 } dcache_entry_t;
 
@@ -111,7 +113,6 @@ typedef struct file_t {
     u32 count;          // reference count
     off_t offset;       // file offset
     int flags;          // file flag
-    int mode;           // file mode
 } file_t;
 
 typedef dentry_t dirent_t;
@@ -122,21 +123,47 @@ typedef enum whence_t {
     SEEK_END       // 结束位置偏移
 } whence_t;
 
-// dev contains super block
-super_block_t *get_super(dev_t dev);
-super_block_t *read_super(dev_t dev);
+typedef struct fs_op_t {
+    int (*mkfs)(dev_t dev, int args);
 
-idx_t balloc(dev_t dev);
-void bfree(dev_t dev, idx_t idx);
-idx_t ialloc(dev_t dev);
-void ifree(dev_t dev, idx_t idx);
+    int (*super)(dev_t dev, super_t *super);
 
-idx_t bmap(inode_t *inode, idx_t block, bool create);
+    int (*open)(inode_t *dir, char *name, int flags, int mode, inode_t **result);
+    void (*close)(inode_t *inode);
 
-inode_t *get_root_inode();
-inode_t *iget(dev_t dev, idx_t nr);
-void iput(inode_t *inode);
-inode_t *new_inode(dev_t dev, idx_t nr);
+    int (*read)(inode_t *inode, char *data, int len, off_t offset);
+    int (*write)(inode_t *inode, char *data, int len, off_t offset);
+    int (*truncate)(inode_t *inode);
+
+    int (*stat)(inode_t *inode, stat_t *stat);
+    int (*permission)(inode_t *inode, int mask);
+
+    int (*namei)(inode_t *dir, char *name, char **next, inode_t **result);
+    int (*mkdir)(inode_t *dir, char *name, int mode);
+    int (*rmdir)(inode_t *dir, char *name);
+    int (*link)(inode_t *odir, char *oldname, inode_t *ndir, char *newname);
+    int (*unlink)(inode_t *dir, char *name);
+    int (*mknod)(inode_t *dir, char *name, int mode, int dev);
+    int (*readdir)(inode_t *inode, dentry_t *entry, size_t count, off_t offset);
+} fs_op_t;
+
+err_t fd_check(fd_t fd, file_t **file);
+fd_t fd_get(file_t **file);
+err_t fd_put(fd_t fd);
+
+int fs_default_nosys();  // 未实现的系统调用
+void *fs_default_null(); // 返回空指针
+
+super_t *get_super(dev_t dev);  // 获得 dev 对应的超级块
+super_t *read_super(dev_t dev); // 读取 dev 对应的超级块
+void put_super(super_t *sb);
+
+inode_t *get_root_inode(); // 获取根目录 inode
+void iput(inode_t *inode); // 释放 inode
+inode_t *find_inode(dev_t dev, idx_t nr);
+inode_t *fit_inode(inode_t *inode);
+
+super_t *get_free_super();
 
 void dcache_init();
 idx_t dcache_lookup(struct inode_t *dir, const char *name, size_t len);
@@ -145,30 +172,19 @@ void dcache_add(struct inode_t *dir, const char *name, size_t len, idx_t nr);
 inode_t *named(char *pathname, char **next); // get pathname parent dir inode
 inode_t *namei(char *pathname);              // get pathname inode
 
-inode_t *inode_open(char *pathname, int flag, int mode);
+fs_op_t *fs_get_op(int type);
+void fs_register_op(int type, fs_op_t *op);
 
-// in inode offset read/write len bytes -> buf
-int inode_read(inode_t *inode, char *buf, u32 len, off_t offset);
-int inode_write(inode_t *inode, char *buf, u32 len, off_t offset);
-
-// free all data blocks of inode
-void inode_truncate(inode_t *inode);
+inode_t *get_free_inode();
+void put_free_inode(inode_t *inode);
 
 file_t *get_file();
 void put_file(file_t *file);
-
-int devmkfs(dev_t dev, u32 icount);
 
 #define P_EXEC IXOTH
 #define P_READ IROTH
 #define P_WRITE IWOTH
 
-bool permission(inode_t *inode, u16 mask);
-
-inode_t *get_pipe_inode();
-
-int pipe_read(inode_t *inode, char *buf, int count);
-
-int pipe_write(inode_t *inode, char *buf, int count);
+bool match_name(const char *name, const char *entry_name, char **next);
 
 #endif // XJOS_FS_H

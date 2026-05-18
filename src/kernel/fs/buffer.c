@@ -92,6 +92,9 @@ static buffer_t *get_new_buffer() {
         bf->count = 0;
         bf->dirty = false;
         bf->valid = false;
+        list_node_init(&bf->hnode);
+        list_node_init(&bf->lru_node);
+        list_node_init(&bf->dirty_node);
         mutex_init(&bf->lock);
         
         buffer_count++;
@@ -245,15 +248,20 @@ void bsync() {
 void bdirty(buffer_t *bf, bool dirty) {
     if (bf->dirty == dirty)
         return;
-    bf->dirty = dirty;
 
     if (dirty) {
         // 变脏
-        list_push(&dirty_list, &bf->dirty_node);
+        if (!bf->dirty_node.prev && !bf->dirty_node.next) {
+            list_push(&dirty_list, &bf->dirty_node);
+        }
     } else {
         // 变干净
-        list_remove(&bf->dirty_node);
+        if (bf->dirty_node.prev && bf->dirty_node.next) {
+            list_remove(&bf->dirty_node);
+            list_node_init(&bf->dirty_node);
+        }
     }
+    bf->dirty = dirty;
 }
 
 

@@ -55,7 +55,7 @@ static int pkt_getpeername(socket_t *s, sockaddr_t *name, int *namelen) {
     sockaddr_ll_t *sin = (sockaddr_ll_t *)name;
 
     sin->family = AF_PACKET;
-    ip_addr_copy(sin->addr, s->pkt->raddr);
+    eth_addr_copy(sin->addr, s->pkt->raddr);
     *namelen = sizeof(sockaddr_ll_t);
     return EOK;
 }
@@ -64,7 +64,7 @@ static int pkt_getsockname(socket_t *s, sockaddr_t *name, int *namelen) {
     sockaddr_ll_t *sin = (sockaddr_ll_t *)name;
 
     sin->family = AF_PACKET;
-    ip_addr_copy(sin->addr, s->pkt->laddr);
+    eth_addr_copy(sin->addr, s->pkt->laddr);
     *namelen = sizeof(sockaddr_ll_t);
     return EOK;
 }
@@ -73,14 +73,14 @@ static int pkt_recvmsg(socket_t *s, msghdr_t *msg, u32 flags) {
     err_t ret = EOK;
     if (list_empty(&s->pkt->rx_pbuf_list)) {
         s->pkt->rx_waiter = running_task();
-        ret = task_block(s->pkt->rx_waiter, NULL, TASK_WAITING, TIMELESS);
+        ret = task_block(s->pkt->rx_waiter, NULL, TASK_WAITING, s->rcvtimeo);
     }
 
     if (ret != EOK)
         return ret;
 
     pbuf_t *pbuf = element_entry(pbuf_t, node, list_popback(&s->pkt->rx_pbuf_list));
-    ret = iovec_write(msg->iov, msg->iovlen, pbuf->payload, pbuf->length);
+    ret = iovec_write(msg->iov, msg->iovlen, (char *)pbuf->payload, pbuf->length);
     pbuf_put(pbuf);
     return ret;
 }
@@ -98,7 +98,7 @@ static int pkt_sendmsg(socket_t *s, msghdr_t *msg, u32 flags) {
 
     pbuf_t *pbuf = pbuf_get();
 
-    ret = iovec_read(msg->iov, msg->iovlen, pbuf->payload, size);
+    ret = iovec_read(msg->iov, msg->iovlen, (char *)pbuf->payload, size);
     if (ret < EOK)
         return ret;
     pbuf->length = size;

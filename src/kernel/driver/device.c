@@ -171,6 +171,7 @@ err_t device_request(dev_t dev, void *buf, u8 count, idx_t idx, int flags, u32 t
         device = device_get(device->parent);
     
     request_t *req = kmalloc(sizeof(request_t));
+    memset(req, 0, sizeof(request_t));
 
     req->dev = device->dev;
     req->buf = buf;

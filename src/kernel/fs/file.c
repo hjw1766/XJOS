@@ -37,6 +37,7 @@ file_t *get_file() {
     }
 
     panic("Exceed max open files\n");
+    return NULL;
 }
 
 

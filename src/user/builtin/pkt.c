@@ -16,14 +16,21 @@ int cmd_pkt(int argc, char **argv, char **envp) {
         goto rollback;
     }
 
+    int opt = 10000;
+    int ret = setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &opt, 4);
+    if (ret < 0) {
+        printf("set timeout error\n");
+        goto rollback;
+    }
+
     msghdr_t msg;
     iovec_t iov;
 
     sockaddr_ll_t saddr;
-    eth_addr_copy(saddr.addr, "\x5a\x5a\x5a\x5a\x5a\x33");
+    eth_addr_copy(saddr.addr, (u8 *)"\x5a\x5a\x5a\x5a\x5a\x33");
     saddr.family = AF_PACKET;
 
-    int ret = bind(fd, (sockaddr_t *)&saddr, sizeof(sockaddr_ll_t));
+    ret = bind(fd, (sockaddr_t *)&saddr, sizeof(sockaddr_ll_t));
     if (ret < EOK) {
         printf("bind error\n");
         goto rollback;
@@ -40,6 +47,11 @@ int cmd_pkt(int argc, char **argv, char **envp) {
 
     printf("receiving...\n");
     ret = recvmsg(fd, &msg, 0);
+    if (ret < 0) {
+        printf("recvmsg error %d\n", ret);
+        goto rollback;
+    }
+
     printf("recvmsg %d\n", ret);
 
     eth_t *eth = (eth_t *)iov.base;
@@ -53,7 +65,7 @@ int cmd_pkt(int argc, char **argv, char **envp) {
 
     char payload[] = "this is ack message"; // acknowledgement
 
-    strcpy(eth->payload, payload);
+    strcpy((void *)eth->payload, payload);
 
     iov.size = sizeof(eth_t) + sizeof(payload);
 

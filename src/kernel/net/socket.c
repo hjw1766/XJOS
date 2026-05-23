@@ -24,7 +24,7 @@ void socket_register_op(socktype_t type, socket_op_t *op) {
     socket_ops[type] = op;
 }
 
-static inode_t *socket_create() {
+static inode_t *socket_inode_create() {
     inode_t *inode = get_free_inode();
     inode->dev = -FS_TYPE_SOCKET;
     inode->desc = NULL;
@@ -36,10 +36,17 @@ static inode_t *socket_create() {
     return inode;
 }
 
+socket_t *socket_create() {
+    socket_t *s = kmalloc(sizeof(socket_t));
+    memset(s, 0, sizeof(socket_t));
+    s->rcvtimeo = TIMELESS;
+    s->sndtimeo = TIMELESS;
+    return s;
+}
+
 static inode_t *socket_open() {
-    inode_t *inode = socket_create();
-    inode->desc = kmalloc(sizeof(socket_t));
-    memset(inode->desc, 0, sizeof(socket_t));
+    inode_t *inode = socket_inode_create();
+    inode->desc = (void *)socket_create();
 
     return inode;
 }
@@ -142,7 +149,7 @@ int sys_accept(int fd, sockaddr_t *addr, int *addrlen) {
     if (ret < 0)
         return ret;
 
-    inode_t *inode = socket_create();
+    inode_t *inode = socket_inode_create();
     inode->desc = ns;
 
     file_t *file;
@@ -240,6 +247,23 @@ int sys_setsockopt(int fd, int level, int optname, const void *optval, int optle
     socket_t *s = socket_get(fd);
     if (!s)
         return -EINVAL;
+    
+    if (level == SOL_SOCKET) {
+        switch (optname) {
+        case SO_SNDTIMEO:
+            if (optlen != 4)
+                return -EINVAL;
+            s->sndtimeo = *(int *)optval;
+            return EOK;
+        case SO_RCVTIMEO:
+            if (optlen != 4)
+                return -EINVAL;
+            s->rcvtimeo = *(int *)optval;
+            return EOK;
+        default:
+            break;
+        }
+    }
 
     return socket_get_op(s->type)->setsockopt(s, level, optname, optval, optlen);
 }

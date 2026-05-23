@@ -7,6 +7,12 @@
 void eth_addr_copy(eth_addr_t dst, eth_addr_t src);
 void ip_addr_copy(ip_addr_t dst, ip_addr_t src);
 
+// 判断地址是否全为 0
+bool eth_addr_isany(eth_addr_t addr);
+
+// 比较两 mac 地址是否相等
+bool eth_addr_cmp(eth_addr_t addr1, eth_addr_t addr2);
+
 // str -> ip_addr_t
 err_t inet_aton(const char *cp, ip_addr_t addr);
 

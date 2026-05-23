@@ -10,7 +10,7 @@ DEBUG ?= 0
 BUSYBOX_APPLETS := ls cat echo env pwd \
 clear date mkdir rmdir rm mount \
 umount mkfs sh dup kill alarm float \
-player
+player pkt
 
 
 # Kernel entry point address
@@ -104,6 +104,7 @@ LIB_OBJS := \
 	$(BUILD_DIR)/libs/common/string.o \
 	$(BUILD_DIR)/libs/common/stdlib.o \
 	$(BUILD_DIR)/libs/common/math.o \
+	$(BUILD_DIR)/libs/common/addr.o \
 
 # ====================================================================
 #                           构建规则

@@ -18,11 +18,11 @@ extern int sys_lseek(fd_t fd, int offset, int whence);
 
 static u32 copy_page(void *page);
 
-#ifdef XJOS_DEBUG
+// #ifdef XJOS_DEBUG
+// #define USER_MEMORY true
+// #else
 #define USER_MEMORY true
-#else
-#define USER_MEMORY false
-#endif
+// #endif
 
 #define ZONE_VALID 1    // ards Valid zone
 #define ZONE_RESERVED 2 // ards Reserved zone

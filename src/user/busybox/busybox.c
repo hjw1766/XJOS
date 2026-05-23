@@ -41,6 +41,7 @@ static const applet_t applets[] = {
     {"kill", cmd_kill},
     {"float", cmd_float},
     {"player", cmd_player},
+    {"pkt", cmd_pkt},
     {NULL, NULL},
 };
 
@@ -49,7 +50,7 @@ static void usage(void) {
     printf("  busybox <applet> [args...]\n");
     printf("  <applet> [args...]   (via hardlink name)\n");
     printf("applets: ls cat echo env pwd clear date" 
-        "mkdir rmdir rm mount umount mkfs sh dup alarm kill float player\n");
+        "mkdir rmdir rm mount umount mkfs sh dup alarm kill float player pkt\n");
 }
 
 int main(int argc, char **argv, char **envp) {

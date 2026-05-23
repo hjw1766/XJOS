@@ -12,6 +12,7 @@
 #include <net/ip.h>
 #include <net/icmp.h>
 #include <net/socket.h>
+#include <net/pkt.h>
 
 
 #endif /* XJOS_NET_H */

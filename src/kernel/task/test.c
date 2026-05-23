@@ -15,9 +15,16 @@ extern int sys_socket(int domain, int type, int protocol);
 extern void sys_close(fd_t fd);
 
 err_t sys_test() {
-    int fd = sys_socket(0, 0, 0);
+    // int fd = sys_socket(0, 0, 0);
+    // if (fd < 0) {
+    //     LOGK("socket error\n");
+    // }
 
-    sys_close(fd);
+    // sys_close(fd);
+
+    char *ch = (char *)0xB8000;
+
+    *ch = 'X';
 
     return EOK;
 }

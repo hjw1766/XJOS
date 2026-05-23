@@ -20,5 +20,6 @@ int cmd_kill(int argc, char **argv, char **envp);
 int cmd_alarm(int argc, char **argv, char **envp);
 int cmd_float(int argc, char **argv, char **envp);
 int cmd_player(int argc, char **argv, char **envp);
+int cmd_pkt(int argc, char **argv, char **envp);
 
 #endif /* XJOS_USER_BUILTIN_APPLETS_H */

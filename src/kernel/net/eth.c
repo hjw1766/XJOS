@@ -11,6 +11,12 @@ err_t eth_input(netif_t *netif, pbuf_t *pbuf) {
     eth_t *eth = (eth_t *)pbuf->eth;
     u16 type = ntohs(eth->type);
 
+    err_t ret = pkt_input(netif, pbuf);
+    if (ret < 0)
+        return ret;
+    if (ret > 0)
+        return EOK;
+
     switch (type) {
         case ETH_TYPE_IPV4:
             // ip input

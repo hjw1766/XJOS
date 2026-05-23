@@ -39,6 +39,7 @@ CFLAGS += -fno-pic                 # Do not generate position-independent code
 CFLAGS += -fno-pie                 # Do not generate position-independent executable
 CFLAGS += -nostdlib                # Do not link standard library
 CFLAGS += -fno-stack-protector     # Disable stack protection
+CFLAGS += -Werror
 CFLAGS += -mno-sse -mno-sse2 -mno-mmx
 CFLAGS += -std=gnu17               # Keep legacy C semantics compatible with GCC15
 CFLAGS += -g                       # Add debug info

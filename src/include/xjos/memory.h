@@ -94,4 +94,6 @@ void free_pde();
 // get vaddr's paddr
 u32 get_paddr(u32 vaddr);
 
+bool memory_access(void *vaddr, int size, bool write, bool user);
+
 #endif /* XJOS_MEMORY_H */

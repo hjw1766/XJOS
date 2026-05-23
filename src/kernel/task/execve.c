@@ -353,8 +353,11 @@ static u32 copy_argv_envp(char *filename, char *argv[], char *envp[]) {
 extern int sys_brk();
 
 int sys_execve(char *filename, char *argv[], char *envp[]) {
-    LOGK("execve enter %s\n", filename);
-    inode_t *inode = namei(filename);
+    char kfilename[MAX_PATH_LEN];
+    strlcpy(kfilename, filename, MAX_PATH_LEN);
+
+    LOGK("execve enter %s\n", kfilename);
+    inode_t *inode = namei(kfilename);
     int ret = EOF;
     if (!inode)
         return -ENOENT;
@@ -370,7 +373,7 @@ int sys_execve(char *filename, char *argv[], char *envp[]) {
     }
     
     task_t *task = running_task();
-    strlcpy(task->name, filename, TASK_NAME_LEN);
+    strlcpy(task->name, kfilename, TASK_NAME_LEN);
 
     u32 top = copy_argv_envp(filename, argv, envp);
 
@@ -383,30 +386,40 @@ int sys_execve(char *filename, char *argv[], char *envp[]) {
         ret = -ENOEXEC;
         goto rollback;
     }
-    LOGK("execve loaded %s entry=%p stack_top=%p\n", filename, entry, top);
+    LOGK("execve loaded %s entry=%p stack_top=%p\n", kfilename, entry, top);
 
     sys_brk((u32)task->end); // set brk to new end  
 
     iput(task->iexec);
     task->iexec = inode;
 
-    // 栈顶预留 intr_frame_t
+    LOGK("execve jump user %s eip=%p esp=%p\n", kfilename, entry, top);
+
+    // 栈顶预留 intr_frame_t。
+    // 注意：这里和当前内核调用栈共用同一页，不能整块 memset，
+    // 否则会把 sys_execve() 还在使用的栈帧一并清掉。
     intr_frame_t *iframe = (intr_frame_t *)((u32)task + PAGE_SIZE - sizeof(intr_frame_t));
 
-    memset(iframe, 0, sizeof(intr_frame_t));
-    iframe->cs = USER_CODE_SELECTOR | 3;
-    iframe->ds = USER_DATA_SELECTOR | 3;
-    iframe->es = USER_DATA_SELECTOR | 3;
-    iframe->fs = USER_DATA_SELECTOR | 3;
-    iframe->gs = USER_DATA_SELECTOR | 3;
-    iframe->ss = USER_DATA_SELECTOR | 3;
-
+    iframe->vector = 0;
+    iframe->edi = 0;
+    iframe->esi = 0;
+    iframe->ebp = 0;
+    iframe->esp_dummy = 0;
+    iframe->ebx = 0;
     iframe->edx = 0; // todo 动态链接器
+    iframe->ecx = 0;
+    iframe->eax = 0;
+    iframe->gs = USER_DATA_SELECTOR | 3;
+    iframe->fs = USER_DATA_SELECTOR | 3;
+    iframe->es = USER_DATA_SELECTOR | 3;
+    iframe->ds = USER_DATA_SELECTOR | 3;
+    iframe->vector0 = 0;
+    iframe->error = 0;
     iframe->eip = entry;
-    iframe->esp = top; // 用户栈顶
-
+    iframe->cs = USER_CODE_SELECTOR | 3;
     iframe->eflags = (0x200 | 0x2); // IF=1 (开中断), IOPL=0
-    LOGK("execve jump user %s eip=%p esp=%p\n", filename, iframe->eip, iframe->esp);
+    iframe->esp = top; // 用户栈顶
+    iframe->ss = USER_DATA_SELECTOR | 3;
 
     // switch to user mode
     asm volatile (

@@ -3,6 +3,9 @@
 
 #include <xjos/types.h>
 #include <fs/stat.h>
+#include <net/socket.h>
+
+#define SYSCALL_SIZE 512
 
 // Syscall numbers shared by kernel dispatcher and user-space wrappers.
 typedef enum {
@@ -55,7 +58,23 @@ typedef enum {
     SYS_NR_YIELD = 158,
     SYS_NR_SLEEP = 162,
     SYS_NR_GETCWD = 183,
-    SYS_NR_MKFS = 200,
+
+    SYS_NR_SOCKET = 359,
+    SYS_NR_BIND = 361,
+    SYS_NR_CONNECT,
+    SYS_NR_LISTEN,
+    SYS_NR_ACCEPT,
+    SYS_NR_GETSOCKOPT,
+    SYS_NR_SETSOCKOPT,
+    SYS_NR_GETSOCKNAME,
+    SYS_NR_GETPEERNAME,
+    SYS_NR_SENDTO,
+    SYS_NR_SENDMSG,
+    SYS_NR_RECVFROM,
+    SYS_NR_RECVMSG,
+    SYS_NR_SHUTDOWN,
+
+    SYS_NR_MKFS = SYSCALL_SIZE - 1,
 } syscall_t;
 
 enum mmap_type_t {

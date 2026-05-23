@@ -11,6 +11,7 @@
 #include <net/arp.h>
 #include <net/ip.h>
 #include <net/icmp.h>
+#include <net/socket.h>
 
 
 #endif /* XJOS_NET_H */

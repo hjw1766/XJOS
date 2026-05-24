@@ -65,6 +65,9 @@ static arp_entry_t *arp_lookup(netif_t *netif, ip_addr_t addr) {
         ip_addr_copy(query, addr);
     }
 
+    if (ip_addr_isany(query))
+        return NULL;
+
     list_t *list = &arp_entry_list;
     arp_entry_t *entry = NULL;
 
@@ -122,6 +125,8 @@ err_t arp_update(netif_t *netif, ip_addr_t ipaddr, eth_addr_t hwaddr) {
     }
 
     arp_entry_t *entry = arp_lookup(netif, ipaddr);
+    if (!entry)
+        return -EADDR;
 
     // 拿到 ARP 条目，更新 MAC 地址和失效时间
     eth_addr_copy(entry->hwaddr, hwaddr);
@@ -201,7 +206,16 @@ err_t arp_eth_output(netif_t *netif, pbuf_t *pbuf, u8 *addr, u16 type, u32 len) 
     eth_addr_copy(pbuf->eth->src, netif->hwaddr);
     pbuf->length = sizeof(eth_t) + len;
 
+    if (netif->flags & NETIF_LOOPBACK) {
+        eth_addr_copy(pbuf->eth->dst, (u8 *)"\x00\x00\x00\x00\x00\x00");
+        netif_output(netif, pbuf);
+        return EOK;
+    }
+
     arp_entry_t *entry = arp_lookup(netif, addr);
+    if (!entry)
+        return -EADDR;
+
     if (entry->expires > sys_time()) {
         entry->used += 1;
         // 填入目的 MAC 地址并发送

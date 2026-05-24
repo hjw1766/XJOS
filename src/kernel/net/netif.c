@@ -3,6 +3,7 @@
 #include <xjos/task.h>
 #include <drivers/device.h>
 #include <xjos/arena.h>
+#include <xjos/string.h>
 #include <xjos/stdio.h>
 #include <xjos/assert.h>
 #include <xjos/debug.h>
@@ -15,14 +16,20 @@ static list_t netif_list;   // 虚拟网卡链表
 static task_t *neti_task;   // rx
 static task_t *neto_task;   // tx
 
-
-netif_t *netif_setup(void *nic, eth_addr_t hwaddr, void *output) {
+netif_t *netif_create() {
     netif_t *netif = kmalloc(sizeof(netif_t));
+    memset(netif, 0, sizeof(netif_t));
+
     sprintf(netif->name, "eth%d", list_len(&netif_list));
 
     list_push(&netif_list, &netif->node);
     list_init(&netif->rx_pbuf_list);
     list_init(&netif->tx_pbuf_list);
+    return netif;
+}
+
+netif_t *netif_setup(void *nic, eth_addr_t hwaddr, void *output) {
+    netif_t *netif = netif_create();
 
     eth_addr_copy(netif->hwaddr, hwaddr);
 

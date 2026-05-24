@@ -12,12 +12,15 @@ extern void tss_init();
 extern void fpu_init();
 extern void pci_init();
 extern void console_init();
+
 extern void pbuf_init();
 extern void netif_init();
+extern void loopif_init();
 extern void eth_init();
 extern void arp_init();
 extern void ip_init();
 extern void icmp_init();
+
 extern void socket_init();
 extern void pkt_init();
 extern void raw_init();
@@ -55,10 +58,12 @@ void kernel_init() {
 
     pbuf_init();        // 初始化网络缓冲区管理器
     netif_init();       // 初始化虚拟网卡和网络接口
+    loopif_init();      // 初始化 loopif
     eth_init();         // 初始化以太网驱动
     arp_init();         // 初始化 ARP 缓存和相关功能
     ip_init();          // 初始化 IP 协议栈
     icmp_init();        // 初始化 ICMP 协议栈
+    
     socket_init();      // 初始化 socket
     pkt_init();         // 初始化 pkt
     raw_init();         // 初始化原始套接字

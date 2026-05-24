@@ -42,6 +42,7 @@ static const applet_t applets[] = {
     {"float", cmd_float},
     {"player", cmd_player},
     {"pkt", cmd_pkt},
+    {"server", cmd_server},
     {NULL, NULL},
 };
 

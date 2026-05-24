@@ -13,6 +13,7 @@
 #include <net/icmp.h>
 #include <net/socket.h>
 #include <net/pkt.h>
+#include <net/raw.h>
 
 
 #endif /* XJOS_NET_H */

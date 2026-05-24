@@ -10,7 +10,7 @@ DEBUG ?= 0
 BUSYBOX_APPLETS := ls cat echo env pwd \
 clear date mkdir rmdir rm mount \
 umount mkfs sh dup kill alarm float \
-player pkt
+player pkt server
 
 
 # Kernel entry point address

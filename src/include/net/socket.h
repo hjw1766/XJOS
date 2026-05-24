@@ -3,6 +3,7 @@
 
 #include <net/types.h>
 #include <net/pkt.h>
+#include <net/raw.h>
 
 enum {
     AF_UNSPEC = 0,
@@ -80,6 +81,7 @@ typedef struct socket_t {
 
     union {
         pkt_pcb_t *pkt;
+        raw_pcb_t *raw;
     };
 } socket_t;
 

@@ -20,6 +20,8 @@ extern void ip_init();
 extern void icmp_init();
 extern void socket_init();
 extern void pkt_init();
+extern void raw_init();
+
 #include <xjos/interrupt.h>
 
 
@@ -59,6 +61,7 @@ void kernel_init() {
     icmp_init();        // 初始化 ICMP 协议栈
     socket_init();      // 初始化 socket
     pkt_init();         // 初始化 pkt
+    raw_init();         // 初始化原始套接字
 
     // 6. 开启中断，将控制权正式移交给调度器
     // 此时时钟中断开始触发，调度器会选中 init_thread 开始执行设备和文件系统的初始化

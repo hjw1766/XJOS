@@ -96,6 +96,13 @@ int sys_socket(int domain, int type, int protocol) {
     socktype_t socktype = SOCK_TYPE_NONE;
     switch (domain) {
         case AF_INET:
+        switch (type) {
+            case SOCK_RAW:
+                socktype = SOCK_TYPE_RAW;
+                break;
+            default:
+                return -EINVAL;
+        }
             break;
         case AF_PACKET:
             socktype = SOCK_TYPE_PKT;

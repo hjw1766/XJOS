@@ -59,6 +59,7 @@ enum {
     EPROTO,            // 协议错误
     EOPTION,           // 选项错误
     EFRAG,             // 分片错误
+    ESOCKET,           // 套接字错误
 };
 
 

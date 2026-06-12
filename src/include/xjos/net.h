@@ -14,6 +14,8 @@
 #include <net/socket.h>
 #include <net/pkt.h>
 #include <net/raw.h>
+#include <net/port.h>
+#include <net/udp.h>
 
 
 #endif /* XJOS_NET_H */

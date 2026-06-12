@@ -51,8 +51,7 @@ err_t ip_input(netif_t *netif, pbuf_t *pbuf) {
         case IP_PROTOCOL_ICMP:
             return icmp_input(netif, pbuf); // ICMP 输入函数会处理 ICMP 协议的输入
         case IP_PROTOCOL_UDP:
-            LOGK("IP:UDP received\n");
-            break;
+            return udp_input(netif, pbuf);
         case IP_PROTOCOL_TCP:
             LOGK("IP:TCP received\n");
             break;

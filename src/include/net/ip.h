@@ -4,6 +4,7 @@
 
 #include <net/types.h>
 #include <net/icmp.h>
+#include <net/udp.h>
 
 #define IP_VERSION_4 4
 #define IP_TTL 64
@@ -41,6 +42,7 @@ typedef struct ip_t {
         u8 payload[0];  // 载荷
         icmp_t icmp[0];     // ICMP 载荷
         icmp_echo_t echo[0];    // ICMP 回显载荷
+        udp_t udp[0];           // udp
     };
 } _packed ip_t;
 

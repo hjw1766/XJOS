@@ -1,6 +1,20 @@
 #include <xjos/types.h>
 #include <xjos/stdio.h>
 #include <xjos/syscall.h>
+#include <xjos/errno.h>
+
+static const char *umount_error(int err) {
+    switch (err) {
+    case ENOENT:
+        return "No such file or directory";
+    case ENOTBLK:
+        return "Not a mount target";
+    case EBUSY:
+        return "Target is busy";
+    default:
+        return "Umount failed";
+    }
+}
 
 int cmd_umount(int argc, char **argv, char **envp) {
     (void)envp;
@@ -11,7 +25,11 @@ int cmd_umount(int argc, char **argv, char **envp) {
         return EOF;
     }
 
-    return umount(argv[1]);
+    int ret = umount(argv[1]);
+    if (ret < 0) {
+        printf("umount: %s\n", umount_error(-ret));
+    }
+    return ret;
 }
 
 #ifndef XJOS_BUSYBOX_APPLET

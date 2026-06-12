@@ -44,6 +44,7 @@ static const applet_t applets[] = {
     {"pkt", cmd_pkt},
     {"server", cmd_server},
     {"ping", cmd_ping},
+    {"client", cmd_client},
     {NULL, NULL},
 };
 
@@ -53,7 +54,7 @@ static void usage(void) {
     printf("  <applet> [args...]   (via hardlink name)\n");
     printf("applets: ls cat echo env pwd clear date" 
         "mkdir rmdir rm mount umount mkfs sh dup alarm kill float player pkt"
-        "server ping\n");
+        "server ping client\n");
 }
 
 int main(int argc, char **argv, char **envp) {

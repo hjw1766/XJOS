@@ -52,6 +52,7 @@ enum {
     ENOTEMPTY = 39,    // 目录不空
     ETIME = 62,        // 超时
     EFSUNK,            // 文件系统未知
+    EMSGSIZE = 90,     // 消息过长
     ERROR = 99,        // 一般错误
     EEOF,              // 读写文件结束
 
@@ -60,6 +61,8 @@ enum {
     EOPTION,           // 选项错误
     EFRAG,             // 分片错误
     ESOCKET,           // 套接字错误
+    EOCCUPIED,         // 被占用
+    ENOTCONN,          // 没有连接
 };
 
 

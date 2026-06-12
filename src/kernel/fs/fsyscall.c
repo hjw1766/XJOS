@@ -609,6 +609,7 @@ int sys_umount(char *target)
     inode_t *inode = NULL;
     super_t *super = NULL;
     int ret = -ERROR;
+    size_t busy_refs = 1;
 
     inode = namei(target);
     if (!inode)
@@ -636,14 +637,20 @@ int sys_umount(char *target)
     }
 
     super = get_super(dev);
-    assert(super);
-    if (!super->imount)
+    if (!super || !super->imount)
     {
         ret = -ENOENT;
         goto rollback;
     }
 
-    if (list_len(&super->inode_list) > 1)
+    if (inode == super->iroot)
+    {
+        // One reference is held by the mounted superblock itself and one is the
+        // temporary reference returned by namei(target).
+        busy_refs = 2;
+    }
+
+    if (list_len(&super->inode_list) > 1 || super->iroot->count > busy_refs)
     {
         ret = -EBUSY;
         goto rollback;
@@ -655,10 +662,11 @@ int sys_umount(char *target)
     super->imount->mount = 0;
     iput(super->imount);
     super->imount = NULL;
+    put_super(super);
     ret = EOK;
+    return ret;
 
 rollback:
-    put_super(super);
     iput(inode);
     return ret;
 }

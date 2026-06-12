@@ -1,4 +1,5 @@
 #include <net/chksum.h>
+#include <net/types.h>
 
 #define CRC_POLY 0xEDB88320
 
@@ -43,4 +44,24 @@ static u16 chksum(void *data, int len, u32 sum) {
 u16 ip_chksum(void *data, int len) {
     u16 sum = chksum(data, len, 0);
     return ~sum;
+}
+
+u16 inet_chksum(void *data, u16 len, ip_addr_t dst, ip_addr_t src, u16 proto) {
+    u32 sum = 0;
+    u16 *ptr;
+
+    ptr = (u16 *)dst;
+    sum += *ptr++;
+    sum += *ptr;
+
+    ptr = (u16 *)src;
+    sum += *ptr++;
+    sum += *ptr;
+
+    sum += htons((proto));
+    sum += htons(len);
+
+    sum += chksum(data, len, sum);
+
+    return (u16)(~sum);
 }

@@ -30,4 +30,7 @@ bool ip_addr_isany(ip_addr_t addr);
 // 判断地址是否为多播地址
 bool ip_addr_ismulticast(ip_addr_t addr);
 
+// 判断 IP 地址是不是自己
+bool ip_addr_isown(ip_addr_t addr);
+
 #endif /* !XJOS_NET_ADDR_H */

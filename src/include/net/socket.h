@@ -1,9 +1,11 @@
 #ifndef XJOS_NET_SOCKET_H
 #define XJOS_NET_SOCKET_H
 
+#include <xjos/stdlib.h>
 #include <net/types.h>
 #include <net/pkt.h>
 #include <net/raw.h>
+#include <net/udp.h>
 
 enum {
     AF_UNSPEC = 0,
@@ -82,6 +84,7 @@ typedef struct socket_t {
     union {
         pkt_pcb_t *pkt;
         raw_pcb_t *raw;
+        udp_pcb_t *udp;
     };
 } socket_t;
 
